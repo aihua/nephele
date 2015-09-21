@@ -26,7 +26,7 @@ func EncReq(content []byte, req *request.Request) (err error) {
 	if l < ReqPrefixLen+ReqSuffixLen {
 		return ErrCorruptedSoapStream
 	}
-	content = content[ReqPrefixLen : l-ReqSuffixLen-2]
+	content = content[ReqPrefixLen : l-ReqSuffixLen]
 	s := string(content)
 	s = strings.Replace(s, "&lt;", "<", -1)
 	s = strings.Replace(s, "&gt;", ">", -1)
