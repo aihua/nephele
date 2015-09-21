@@ -15,7 +15,7 @@ var (
 )
 
 func GetChannels() (map[string]string, util.Error) {
-	if len(channels) < 1 || isRefresh(getChannelsTime) {
+	if len(channels) < 1 || IsRefresh(getChannelsTime) {
 		o := orm.NewOrm()
 		res := make(orm.Params)
 		_, err := o.Raw("SELECT name,code FROM channel").RowsToMap(&res, "name", "code")
@@ -41,6 +41,6 @@ func GetChannelCode(channel string) string {
 	return code
 }
 
-func isRefresh(t time.Time) bool {
+func IsRefresh(t time.Time) bool {
 	return t.Add(1 * time.Minute).Before(time.Now())
 }

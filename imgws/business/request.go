@@ -8,6 +8,7 @@ import (
 	"github.com/ctripcorp/nephele/util/soapparse/request"
 	"github.com/ctripcorp/nephele/util/soapparse/response"
 	"image"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -144,8 +145,31 @@ func (this ImageRequest) Download(r *request.LoadImgRequest) (response.LoadImgRe
 	return response.LoadImgResponse{FileBytes: bts}, util.Error{}
 }
 
-func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) {
-
+func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZipResponse, util.Error) {
+	if len(r.Files.LoadFiles) < 1 {
+		return response.LoadZipResponse{}, util.Error{IsNormal: true, Err: errors.New("No files in request"), Type: "NoFilesInRequest"}
+	}
+	files := make(map[string][]byte)
+	for _, file := range r.Files.LoadFiles {
+		name := file.FilePath
+		if len(file.Rename) > 0 {
+			name = file.Rename + path.Ext(file.FilePath)
+		}
+		storage, e := GetStorage(name)
+		if e.Err != nil {
+			return response.LoadZipResponse{}, e
+		}
+		bts, e := storage.Download()
+		if e.Err != nil {
+			return response.LoadZipResponse{}, e
+		}
+		files[name] = bts
+	}
+	bts, e := util.Zip(files)
+	if e.Err != nil {
+		return response.LoadZipResponse{}, e
+	}
+	return response.LoadZipResponse{FileBytes: bts}, util.Error{}
 }
 
 func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteResponse, util.Error) {

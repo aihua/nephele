@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	. "os"
-	"syscall"
+	//"syscall"
 	"time"
 )
 
@@ -18,10 +18,10 @@ func cat_new_mids() (floor uint64, ceiling uint64, tsh uint64, err error) {
 	defer func() {
 		file.Sync()
 		file.Close()
-		syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-	} ()
+		//syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	}()
 	share := make([]byte, 16)
-	syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
+	//syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
 	n, err := file.Read(share)
 	if err != nil && err != io.EOF {
 		return 0, 0, tsh, errors.New("Unable to read temp file")

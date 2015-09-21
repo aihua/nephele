@@ -1,6 +1,7 @@
 package util
 
 import (
+	"archive/zip"
 	"bytes"
 	"net"
 	"strconv"
@@ -77,4 +78,36 @@ func Substr(str string, start, length int) string {
 		end = rl
 	}
 	return string(rs[start:end])
+}
+
+type MemoryWriter struct {
+	Content []byte
+}
+
+func (this *MemoryWriter) Write(p []byte) (n int, err error) {
+	this.Content = p
+	n = len(p)
+	err = nil
+	return
+}
+func Zip(files map[string][]byte) ([]byte, Error) {
+	memory := new(MemoryWriter)
+	wzip := zip.NewWriter(memory)
+	defer func() {
+		if err := wzip.Close(); err != nil {
+			//todo
+		}
+	}()
+	errtype := "ZipFail"
+	for fileName, content := range files {
+		f, err := wzip.Create(fileName)
+		if err != nil {
+			return []byte{}, Error{IsNormal: false, Err: err, Type: errtype}
+		}
+		_, err = f.Write(content)
+		if err != nil {
+			return []byte{}, Error{IsNormal: false, Err: err, Type: errtype}
+		}
+	}
+	return memory.Content, Error{}
 }
