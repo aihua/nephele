@@ -14,4 +14,6 @@ func init() {
 	beego.Router("/", &controllers.ImageController{})
 	beego.Include(&controllers.WhitelistController{})
 	beego.Include(&controllers.ImageDeleteController{})
+	beego.Include(&controllers.ConfigController{})
+	beego.Include(&controllers.ChannelController{})
 }

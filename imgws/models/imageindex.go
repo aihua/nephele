@@ -93,7 +93,6 @@ func (this *ImageIndex) Parse(imageName string) util.Error {
 func (this *ImageIndex) DropExtension(imageName string) string {
 	return strings.Split(imageName, ".")[0]
 }
-
 func (this *ImageIndex) ParseName(imageName string) util.Error {
 	if len(imageName) != NEWIMAGENAMELENGTH {
 		return util.Error{IsNormal: false, Err: errors.New("imagename length is invalid"), Type: ERRTYPE_IMAGENAMEINVALID}

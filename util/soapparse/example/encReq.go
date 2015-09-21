@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	. "github.com/ctripcorp/nephele/util/soapparse"
 	"github.com/ctripcorp/nephele/util/soapparse/request"
+	"io/ioutil"
 )
 
 func main() {

@@ -47,6 +47,41 @@ type Config struct {
 	Recordtime string
 }
 
+func getNow() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 10)
+}
+func (this *Config) Insert() error {
+	this.Recordtime = getNow()
+	o := orm.NewOrm()
+	id, err := o.Insert(this)
+	if err != nil {
+		return err
+	}
+	this.Id = id
+	return nil
+}
+
+func (this *Config) UpdateValue() error {
+	o := orm.NewOrm()
+	now := getNow()
+	_, err := o.Raw("UPDATE FROM Config SET VALUE=? , recordtime=? WHERE channel=? AND KEY=? AND recordtime=?", this.Value, now, this.Channel, this.Key, this.Recordtime).Exec()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (this *Config) Get() error {
+	o := orm.NewOrm()
+	err := o.Raw("SELECT idx,channel,key,value,recordtime FROM config WHERE channel=? AND key=?", this.Channel, this.Key).QueryRow(&this)
+	if err != nil {
+		return err
+	}
+	if this.Id < 1 {
+		return errors.New("record isn't exists!")
+	}
+	return nil
+}
 func (this *Config) GetSizes() (string, error) {
 	this.Key = "sizes"
 	var (
