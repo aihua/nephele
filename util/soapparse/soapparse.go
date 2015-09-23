@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	b64 = base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+	B64 = base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 )
 
 var (
@@ -41,7 +41,7 @@ func EncReq(content []byte, req *request.Request) (err error) {
 		return err
 	}
 
-	req.SaveRequest.FileBytes, err = b64.DecodeString(string(req.SaveRequest.FileBytes))
+	req.SaveRequest.FileBytes, err = B64.DecodeString(string(req.SaveRequest.FileBytes))
 	if err != nil {
 		return err
 	}
