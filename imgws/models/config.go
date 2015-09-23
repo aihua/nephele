@@ -64,24 +64,13 @@ func (this *Config) Insert() error {
 func (this *Config) UpdateValue() error {
 	o := orm.NewOrm()
 	now := getNow()
-	_, err := o.Raw("UPDATE FROM Config SET VALUE=? , recordtime=? WHERE channel=? AND KEY=? AND recordtime=?", this.Value, now, this.Channel, this.Key, this.Recordtime).Exec()
+	_, err := o.Raw("UPDATE config SET value=?, recordtime=? WHERE channel=? AND `key`=?", this.Value, now, this.Channel, this.Key).Exec()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (this *Config) Get() error {
-	o := orm.NewOrm()
-	err := o.Raw("SELECT idx,channel,key,value,recordtime FROM config WHERE channel=? AND key=?", this.Channel, this.Key).QueryRow(&this)
-	if err != nil {
-		return err
-	}
-	if this.Id < 1 {
-		return errors.New("record isn't exists!")
-	}
-	return nil
-}
 func (this *Config) GetSizes() (string, error) {
 	this.Key = "sizes"
 	var (
@@ -169,7 +158,7 @@ func GetConfigs() (map[string]map[string]string, util.Error) {
 	if len(config) < 1 || isRefresh(getConfigTime) {
 		o := orm.NewOrm()
 		var configs []Config
-		_, err := o.Raw("SELECT channel,key,value FROM config").QueryRows(&configs)
+		_, err := o.Raw("SELECT channel,`key`,value FROM config").QueryRows(&configs)
 		if err != nil {
 			return nil, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_GETCONFIGS}
 		}
@@ -262,25 +251,29 @@ func GetNfsT1Path(channel string) ([]string, util.Error) {
 }
 
 func getValue(channel, key string) (string, util.Error) {
-	configs, e := GetChannelConfigs(channel)
+	configs, e := GetConfigs()
 	if e.Err != nil {
 		return "", e
 	}
+
 	var (
 		value  string
 		exists bool
 	)
-	value, exists = configs[key]
+	channelConfigs, exists := configs[channel]
 	if exists {
-		return value, util.Error{}
+		value, exists = channelConfigs[key]
+		if exists {
+			return value, util.Error{}
+		}
 	}
-	defaultConfigs, e := GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
-	if e.Err != nil {
-		return "", e
-	}
-	value, exists = defaultConfigs[key]
+
+	defaultConfigs, exists := configs[CONFIG_DEFAULTCHANNEL]
 	if exists {
-		return value, util.Error{}
+		value, exists = defaultConfigs[key]
+		if exists {
+			return value, util.Error{}
+		}
 	}
 	return "", util.Error{IsNormal: false, Err: errors.New(util.JoinString("Channel[", channel, "] Key[", key, "] is't exists!")), Type: ERRORTYPE_CONFIGNOEXISTS}
 }

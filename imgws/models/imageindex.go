@@ -16,6 +16,7 @@ var (
 	ERRORTYPE_INSERTIMAGEINDEX = "InsertImageIndex"
 	ERRORTYPE_INSERTIMAGEPLAN  = "InsertImagePlan"
 	NEWIMAGENAMELENGTH         = 21
+	DEFAULTVERSION             = "0"
 )
 
 type ImageIndex struct {
@@ -26,6 +27,7 @@ type ImageIndex struct {
 	Profile      string
 	PartitionKey int16
 	TableZone    int
+	Version      string
 }
 
 func getDBString(tableZone int) string {
@@ -41,7 +43,7 @@ func (this *ImageIndex) SaveToDB(plan string) util.Error {
 	o.Using(getDBString(this.TableZone))
 	o.Begin()
 	partitionKey := util.GetPartitionKey(time.Now())
-	res, err := o.Raw("INSERT INTO `imageindex_"+strconv.Itoa(this.TableZone)+"`(`channel`,`storagePath`,`storageType`,`profile`,`createtime`,`partitionKey`)VALUES(?,?,?,?,NOW(),?)", this.Channel, this.StoragePath, this.StorageType, this.Profile, partitionKey).Exec()
+	res, err := o.Raw("INSERT INTO `imageindex_"+strconv.Itoa(this.TableZone)+"` (`channel`,`storagePath`,`storageType`,`profile`,`createtime`,`partitionKey`)VALUES(?,?,?,?,NOW(),?)", this.Channel, this.StoragePath, this.StorageType, this.Profile, partitionKey).Exec()
 	if err != nil {
 		o.Rollback()
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEINDEX}
@@ -51,8 +53,8 @@ func (this *ImageIndex) SaveToDB(plan string) util.Error {
 		o.Rollback()
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEINDEX}
 	}
-	if plan == "" {
-		res, err := o.Raw("INSERT INTO 'imageplan_"+strconv.Itoa(this.TableZone)+"'(imgIdx,plan,partitionKey)VALUES(?,?,?)", id, plan, partitionKey).Exec()
+	if plan != "" {
+		res, err := o.Raw("INSERT INTO `imageplan_"+strconv.Itoa(this.TableZone)+"`(imgIdx,plan,partitionKey)VALUES(?,?,?)", id, plan, partitionKey).Exec()
 		if err != nil {
 			o.Rollback()
 			return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEPLAN}
@@ -75,7 +77,7 @@ func (this ImageIndex) GetImageName() string {
 	zone := strconv.FormatInt(int64(this.TableZone), 36)         //转36进制
 	partition := strconv.FormatInt(int64(this.PartitionKey), 36) //转36进制
 	//1~2 频道 3~4 分区 5~6 时间 7 版本号 8~17 索引 18~21 检验码
-	tmp := util.JoinString(this.Channel, util.Cover(zone, "0", 2), util.Cover(partition, "0", 2), "0", util.Cover(strconv.FormatInt(this.Idx, 10), "0", 10))
+	tmp := util.JoinString(this.Channel, util.Cover(zone, "0", 2), util.Cover(partition, "0", 2), DEFAULTVERSION, util.Cover(strconv.FormatInt(this.Idx, 10), "0", 10))
 	return util.JoinString("\\", tmp, util.Compute(tmp), ".", ext)
 }
 
@@ -97,8 +99,8 @@ func (this *ImageIndex) ParseName(imageName string) util.Error {
 	if len(imageName) != NEWIMAGENAMELENGTH {
 		return util.Error{IsNormal: false, Err: errors.New("imagename length is invalid"), Type: ERRTYPE_IMAGENAMEINVALID}
 	}
-	swithoutcompute := util.Substr(imageName, 0, 17)
-	scompute := util.Substr(imageName, 18, 4)
+	swithoutcompute := util.Substr(imageName, 0, NEWIMAGENAMELENGTH-4)
+	scompute := util.Substr(imageName, NEWIMAGENAMELENGTH-4, 4)
 	if util.Compute(swithoutcompute) != scompute {
 		return util.Error{IsNormal: true, Err: errors.New("Compute check faile."), Type: ERRTYPE_IMAGENAMEINVALID}
 	}
@@ -112,6 +114,7 @@ func (this *ImageIndex) ParseName(imageName string) util.Error {
 	if err != nil {
 		return util.Error{IsNormal: true, Err: errors.New("partition is invalid."), Type: ERRTYPE_IMAGENAMEINVALID}
 	}
+	version := util.Substr(imageName, 6, 1)
 	idx, err := strconv.ParseInt(util.Substr(imageName, 7, 10), 10, 10)
 	if err != nil {
 		return util.Error{IsNormal: true, Err: errors.New("index is invalid."), Type: ERRTYPE_IMAGENAMEINVALID}
@@ -120,6 +123,7 @@ func (this *ImageIndex) ParseName(imageName string) util.Error {
 	this.Idx = idx
 	this.PartitionKey = int16(partitionKey)
 	this.TableZone = int(tableZone)
+	this.Version = version
 	return util.Error{}
 }
 

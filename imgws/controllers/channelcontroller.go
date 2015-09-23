@@ -1,14 +1,16 @@
 package controllers
 
 import (
+	"encoding/json"
 	"github.com/astaxie/beego"
-	_ "github.com/ctripcorp/nephele/imgws/models"
+	"github.com/ctripcorp/nephele/imgws/models"
 )
 
 type ChannelController struct {
 	beego.Controller
 }
 
+// @router /channel/add/ [get]
 func (this *ChannelController) Add() {
 	name := this.GetString("name")
 	code := this.GetString("code")
@@ -16,13 +18,39 @@ func (this *ChannelController) Add() {
 		this.Ctx.WriteString("params isn't empty!")
 		return
 	}
-	//channel := models.Channel{}
-
+	channel := models.Channel{Name: name, Code: code}
+	err := channel.Insert()
+	if err != nil {
+		this.Ctx.WriteString(err.Error())
+	} else {
+		this.Ctx.WriteString("success")
+	}
 }
 
+// @router /channel/get/ [get]
 func (this *ChannelController) Get() {
-
+	ch := models.Channel{}
+	channels, err := ch.Get()
+	if err != nil {
+		this.Ctx.WriteString(err.Error())
+	} else {
+		bts, _ := json.Marshal(channels)
+		this.Ctx.WriteString(string(bts))
+	}
 }
-func (this *ChannelController) Update() {
 
+// @router /channel/update/ [get]
+func (this *ChannelController) Update() {
+	name := this.GetString("name")
+	code := this.GetString("code")
+	if name == "" || code == "" {
+		this.Ctx.WriteString("params is't empty")
+	}
+	channel := models.Channel{Name: name, Code: code}
+	err := channel.Upload()
+	if err != nil {
+		this.Ctx.WriteString(err.Error())
+	} else {
+		this.Ctx.WriteString("success")
+	}
 }

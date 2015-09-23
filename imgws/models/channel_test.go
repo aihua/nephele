@@ -1,6 +1,10 @@
 package models
 
 import (
-	"github.com/astaxie/beego/orm"
+	_ "github.com/astaxie/beego/orm"
 	"testing"
 )
+
+func Test(t *testing.T) {
+
+}

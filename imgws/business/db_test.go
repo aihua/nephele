@@ -7,9 +7,14 @@ import (
 	"time"
 )
 
+var isinit bool = false
+
 func InitDBForTest() {
-	orm.RegisterDriver("mysql", orm.DR_MySQL)
-	orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
+	if !isinit {
+		orm.RegisterDriver("mysql", orm.DR_MySQL)
+		orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
+		isinit = true
+	}
 }
 func TestGetChannels(t *testing.T) {
 	InitDBForTest()
@@ -34,9 +39,6 @@ func TestGetChannels(t *testing.T) {
 	m2count := len(m2)
 	if m2count == mcount {
 		t.Error("refresh fail")
-	}
-	for k, _ := range m2 {
-		println(k)
 	}
 
 	//delete

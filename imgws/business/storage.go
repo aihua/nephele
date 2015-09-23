@@ -2,6 +2,7 @@ package business
 
 import (
 	"errors"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/fdfs"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
@@ -27,16 +28,16 @@ var (
 	fdfsClient fdfs.FdfsClient
 )
 
-func NewStorage() (Storage, string) {
-	return FdfsStorage{Path: ""}, STORAGETYPE_FDFS
+func NewStorage(c cat.Cat) (Storage, string) {
+	return &FdfsStorage{Path: "", Cat: c}, STORAGETYPE_FDFS
 }
 
-func CreateStorage(path, storageType string) Storage {
+func CreateStorage(path, storageType string, c cat.Cat) Storage {
 	switch storageType {
 	case STORAGETYPE_FDFS:
-		return FdfsStorage{Path: path}
+		return &FdfsStorage{Path: path, Cat: c}
 	case STORAGETYPE_NFS:
-		return NfsStorage{Path: path}
+		return &NfsStorage{Path: path, Cat: c}
 	default:
 		return nil
 	}
@@ -44,7 +45,7 @@ func CreateStorage(path, storageType string) Storage {
 
 type FdfsStorage struct {
 	Path string
-	//Cat  cat.Cat
+	Cat  cat.Cat
 }
 
 var (
@@ -53,7 +54,7 @@ var (
 	lock            = make(chan int, 1)
 )
 
-func (this FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
+func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
 	if e := initFdfsClient(); e.Err != nil {
 		return "", e
 	}
@@ -74,7 +75,7 @@ func (this FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) 
 	return path, util.Error{}
 }
 
-func (this FdfsStorage) Download() ([]byte, util.Error) {
+func (this *FdfsStorage) Download() ([]byte, util.Error) {
 	if e := initFdfsClient(); e.Err != nil {
 		return nil, e
 	}
@@ -82,18 +83,19 @@ func (this FdfsStorage) Download() ([]byte, util.Error) {
 		bts []byte
 		err error
 	)
-	bts, err = fdfsClient.DownloadToBuffer(this.Path, nil)
+
+	bts, err = fdfsClient.DownloadToBuffer(this.Path, this.Cat)
 	if err != nil {
-		return []byte{}, util.Error{IsNormal: false, Err: errors.New("download file failed!"), Type: ERRORTYPE_FDFSDOWNLOADERR}
+		return []byte{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDOWNLOADERR}
 	}
 	return bts, util.Error{}
 }
 
-func (this FdfsStorage) ConvertFilePath() util.Error {
+func (this *FdfsStorage) ConvertFilePath() util.Error {
 	this.Path = strings.Replace(this.Path, "\\", "/", -1)
 	this.Path = util.Substr(this.Path, 4, len(this.Path)-4)
 	index := strings.Index(this.Path, "/")
-	this.Path = util.Substr(this.Path, index, len(this.Path)-index)
+	this.Path = util.Substr(this.Path, index+1, len(this.Path)-index-1)
 	return util.Error{}
 }
 
@@ -125,13 +127,14 @@ func initFdfsClient() util.Error {
 
 type NfsStorage struct {
 	Path string
+	Cat  cat.Cat
 }
 
-func (this NfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
+func (this *NfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
 	return "", util.Error{}
 }
 
-func (this NfsStorage) Download() ([]byte, util.Error) {
+func (this *NfsStorage) Download() ([]byte, util.Error) {
 	var (
 		bts []byte
 		err error
@@ -143,7 +146,7 @@ func (this NfsStorage) Download() ([]byte, util.Error) {
 	return bts, util.Error{}
 }
 
-func (this NfsStorage) ConvertFilePath() util.Error {
+func (this *NfsStorage) ConvertFilePath() util.Error {
 	this.Path = strings.Replace(this.Path, "/", "\\", -1)
 
 	if this.isT1() {
@@ -166,6 +169,7 @@ func (this NfsStorage) ConvertFilePath() util.Error {
 
 		this.Path = shading(nfs) + this.Path
 	}
+	this.Path = strings.Replace(this.Path, "\\", "/", -1)
 	return util.Error{}
 }
 

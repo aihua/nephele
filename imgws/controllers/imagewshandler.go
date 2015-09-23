@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgws/business"
 	"github.com/ctripcorp/nephele/util"
 	"github.com/ctripcorp/nephele/util/soapparse"
@@ -28,8 +29,25 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 
+	Cat := cat.Instance()
+	tran := Cat.NewTransaction("ImageWS.URL", "ImageWs")
+	var result util.Error
+	defer func() {
+		if p := recover(); p != nil {
+			Cat.LogPanic(p)
+		}
+		if result.Err != nil && !result.IsNormal {
+			tran.SetStatus(result.Err)
+		} else {
+			tran.SetStatus("0")
+		}
+		tran.Complete()
+	}()
 	bts, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		result = util.Error{IsNormal: false, Err: err, Type: "RequestReadError"}
+		util.LogErrorEvent(Cat, "RequestReadError", err.Error())
+
 		msg := []byte(err.Error())
 		writeResponse(w, msg)
 		return
@@ -37,7 +55,9 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req := request.Request{}
 	if err := soapparse.EncReq(bts, &req); err != nil {
-		content := []byte("request invalid")
+		util.LogErrorEvent(Cat, "SoapParseRequestError", err.Error())
+		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseRequestError"}
+		content := []byte("SoapParseRequestError")
 		writeResponse(w, content)
 		return
 	}
@@ -45,8 +65,21 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp       interface{}
 		header     *response.Header
 		e          util.Error
-		imgRequest = business.ImageRequest{}
+		imgRequest = business.ImageRequest{Cat: Cat}
 	)
+
+	requestTran := Cat.NewTransaction("ImageWS.Request", req.Header.RequestType)
+	defer func() {
+		if p := recover(); p != nil {
+			Cat.LogPanic(p)
+		}
+		if result.Err != nil && !result.IsNormal {
+			requestTran.SetStatus(result.Err)
+		} else {
+			requestTran.SetStatus("0")
+		}
+		requestTran.Complete()
+	}()
 
 	switch req.Header.RequestType {
 	case REQUESTTYPE_SAVEIMAGE:
@@ -58,15 +91,19 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case REQUESTTYPE_DELETEIMAGE:
 		resp, e = imgRequest.Delete(&req.DeleteRequest)
 	default:
+		util.LogErrorEvent(Cat, "RequestTypeInvalid", req.Header.RequestType)
 		e = util.Error{IsNormal: true, Err: errors.New("requesttype is invalid!"), Type: "RequestTypeInvalid"}
 	}
 	if e.Err != nil {
+		result = e
 		header = createFailHeader(req.Header, fmt.Sprintf("%v", e.Err))
 	} else {
 		header = transformHeader(req.Header, RESULTCODE_SUCCESS, "")
 	}
 	content, err := soapparse.DecResp(header, resp)
 	if err != nil {
+		util.LogErrorEvent(Cat, "SoapParseResponseError", err.Error())
+		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseResponseError"}
 		msg := []byte(err.Error())
 		writeResponse(w, msg)
 		return

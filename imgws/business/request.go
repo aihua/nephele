@@ -3,11 +3,16 @@ package business
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
 	"github.com/ctripcorp/nephele/util/soapparse/request"
 	"github.com/ctripcorp/nephele/util/soapparse/response"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"path"
 	"strconv"
 	"strings"
@@ -21,10 +26,13 @@ var (
 )
 
 type ImageRequest struct {
+	Cat cat.Cat
 }
 
 func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, util.Error) {
 	r.Channel = strings.ToLower(r.Channel)
+	util.LogEvent(this.Cat, "ImageWs.SaveRequest", r.Channel, nil)
+
 	this.checkPlanID(r)
 	if err := this.checkSaveRequest(r); err.Err != nil {
 		return response.SaveResponse{}, err
@@ -32,7 +40,7 @@ func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, ut
 	if err := this.checkSaveCheckItem(r); err.Err != nil {
 		return response.SaveResponse{}, err
 	}
-	storage, storageType := NewStorage()
+	storage, storageType := NewStorage(this.Cat)
 	path, e := storage.Upload(r.FileBytes, r.TargetFormat)
 	if e.Err != nil {
 		return response.SaveResponse{}, e
@@ -41,6 +49,7 @@ func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, ut
 	imgIndex := models.ImageIndex{Channel: GetChannelCode(r.Channel), StoragePath: path, StorageType: storageType, TableZone: tableZone}
 	plan := ""
 	if r.Process.AnyTypes != nil && len(r.Process.AnyTypes) > 0 {
+		fmt.Println(len(r.Process.AnyTypes))
 		bts, err := r.Process.MarshalJSON()
 		if err != nil {
 			return response.SaveResponse{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_MARSHALJSON}
@@ -106,12 +115,13 @@ func (this ImageRequest) checkSaveCheckItem(r *request.SaveRequest) util.Error {
 	//	return util.Error{}
 	//}
 	if r.CheckItem.IsOtherImage {
-		if isSvg(r.FileBytes) {
+		if !isSvg(r.FileBytes) {
 			return util.Error{IsNormal: false, Err: errors.New("image format is't invalid!"), Type: t}
 		}
 	} else {
 		img, _, err := image.Decode(bytes.NewReader(r.FileBytes))
 		if err != nil {
+			fmt.Println("----------------")
 			return util.Error{IsNormal: false, Err: err, Type: t}
 		}
 		//todo check img format
@@ -134,10 +144,13 @@ func isSvg(bts []byte) bool {
 }
 
 func (this ImageRequest) Download(r *request.LoadImgRequest) (response.LoadImgResponse, util.Error) {
-	storage, e := GetStorage(r.FilePath)
+	storage, e := this.getStorage(r.FilePath)
 	if e.Err != nil {
 		return response.LoadImgResponse{}, e
 	}
+
+	util.LogEvent(this.Cat, "ImageWs.DownloadRequest", GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath})
+
 	bts, e := storage.Download()
 	if e.Err != nil {
 		return response.LoadImgResponse{}, e
@@ -149,40 +162,58 @@ func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZi
 	if len(r.Files.LoadFiles) < 1 {
 		return response.LoadZipResponse{}, util.Error{IsNormal: true, Err: errors.New("No files in request"), Type: "NoFilesInRequest"}
 	}
+	var result util.Error
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction("ImageWs.DownloadZipRequest", strconv.Itoa(len(r.Files.LoadFiles)))
+		defer func() {
+			if result.Err != nil && !result.IsNormal {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
+
 	files := make(map[string][]byte)
 	for _, file := range r.Files.LoadFiles {
 		name := file.FilePath
 		if len(file.Rename) > 0 {
 			name = file.Rename + path.Ext(file.FilePath)
 		}
-		storage, e := GetStorage(name)
+		storage, e := this.getStorage(name)
 		if e.Err != nil {
+			result = e
 			return response.LoadZipResponse{}, e
 		}
+		util.LogEvent(this.Cat, "ImageWs.DownloadZipRequest", GetChannelCode(file.FilePath), map[string]string{"uri": file.FilePath})
 		bts, e := storage.Download()
 		if e.Err != nil {
+			result = e
 			return response.LoadZipResponse{}, e
 		}
 		files[name] = bts
 	}
 	bts, e := util.Zip(files)
 	if e.Err != nil {
+		result = e
 		return response.LoadZipResponse{}, e
 	}
 	return response.LoadZipResponse{FileBytes: bts}, util.Error{}
 }
 
 func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteResponse, util.Error) {
-	_, e := GetStorage(r.FilePath)
+	_, e := this.getStorage(r.FilePath)
 	if e.Err != nil {
 		return response.DeleteResponse{}, e
 	}
 
+	util.LogEvent(this.Cat, "ImageWs.DeleteRequest", GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
 	//delete
 	return response.DeleteResponse{}, util.Error{}
 }
 
-func GetStorage(path string) (Storage, util.Error) {
+func (this ImageRequest) getStorage(path string) (Storage, util.Error) {
 	path = strings.Replace(path, "/", "\\", -1)
 	var (
 		storagePath string
@@ -196,8 +227,9 @@ func GetStorage(path string) (Storage, util.Error) {
 			return nil, e
 		}
 		storagePath = imgIndex.StoragePath
+
 		storageType = imgIndex.StorageType
-		storage = CreateStorage(storagePath, storageType)
+		storage = CreateStorage(storagePath, storageType, this.Cat)
 		if storage == nil {
 			return nil, util.Error{IsNormal: false, Err: errors.New(util.JoinString("Can't supporte storagetype[", storageType, "]")), Type: ERRORTYPE_STORAGETYPENOSUPPORTE}
 		}
@@ -206,7 +238,7 @@ func GetStorage(path string) (Storage, util.Error) {
 		if isFdfs(path) {
 			storageType = STORAGETYPE_FDFS
 		}
-		storage = CreateStorage(path, storageType)
+		storage = CreateStorage(path, storageType, this.Cat)
 		if e := storage.ConvertFilePath(); e.Err != nil {
 			return nil, e
 		}
@@ -214,6 +246,32 @@ func GetStorage(path string) (Storage, util.Error) {
 	return storage, util.Error{}
 }
 
+func GetChannel(path string) string {
+	path = strings.Replace(path, "/", "\\", -1)
+	if isNewUri(path) {
+		channelCode := util.Substr(path, 1, 2)
+		channels, _ := GetChannels()
+		for k, v := range channels {
+			if v == channelCode {
+				return k
+			}
+		}
+		return ""
+	}
+	if isFdfs(path) {
+		s := util.Substr(path, 4, len(path)-4)
+		i := strings.Index(s, "\\")
+		return util.Substr(s, 0, i)
+	}
+	if isT1(path) {
+		s := util.Substr(path, 4, len(path)-4)
+		i := strings.Index(s, "\\")
+		return util.Substr(s, 0, i)
+	}
+	s := util.Substr(path, 1, len(path)-4)
+	i := strings.Index(s, "\\")
+	return util.Substr(s, 0, i)
+}
 func isNewUri(uri string) bool {
 	index := strings.Index(uri, ".")
 	if index < 1 {

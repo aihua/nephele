@@ -17,7 +17,7 @@ func (this *Channel) Insert() error {
 
 func (this *Channel) Upload() error {
 	o := orm.NewOrm()
-	_, err := o.Raw("UPDATE FROM channel SET code=? WHERE name=?", this.Code, this.Name).Exec()
+	_, err := o.Raw("UPDATE channel SET code=? WHERE name=?", this.Code, this.Name).Exec()
 	return err
 }
 

@@ -3,6 +3,7 @@ package util
 import (
 	"archive/zip"
 	"bytes"
+	cat "github.com/ctripcorp/cat.go"
 	"net"
 	"strconv"
 	"strings"
@@ -80,24 +81,10 @@ func Substr(str string, start, length int) string {
 	return string(rs[start:end])
 }
 
-type MemoryWriter struct {
-	Content []byte
-}
-
-func (this *MemoryWriter) Write(p []byte) (n int, err error) {
-	this.Content = p
-	n = len(p)
-	err = nil
-	return
-}
 func Zip(files map[string][]byte) ([]byte, Error) {
-	memory := new(MemoryWriter)
-	wzip := zip.NewWriter(memory)
-	defer func() {
-		if err := wzip.Close(); err != nil {
-			//todo
-		}
-	}()
+	buffer := bytes.NewBuffer(nil)
+	wzip := zip.NewWriter(buffer)
+
 	errtype := "ZipFail"
 	for fileName, content := range files {
 		f, err := wzip.Create(fileName)
@@ -109,5 +96,32 @@ func Zip(files map[string][]byte) ([]byte, Error) {
 			return []byte{}, Error{IsNormal: false, Err: err, Type: errtype}
 		}
 	}
-	return memory.Content, Error{}
+	if err := wzip.Close(); err != nil {
+		return []byte{}, Error{IsNormal: false, Err: err, Type: errtype}
+	}
+	return buffer.Bytes(), Error{}
+}
+
+func LogErrorEvent(cat cat.Cat, name string, err string) {
+	if cat == nil {
+		return
+	}
+	event := cat.NewEvent("Error", name)
+	event.AddData("detail", err)
+	event.SetStatus("ERROR")
+	event.Complete()
+}
+
+func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
+	if cat == nil {
+		return
+	}
+	event := cat.NewEvent(title, name)
+	if data != nil {
+		for k, v := range data {
+			event.AddData(k, v)
+		}
+	}
+	event.SetStatus("0")
+	event.Complete()
 }

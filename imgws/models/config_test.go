@@ -2,13 +2,19 @@ package models
 
 import (
 	"github.com/astaxie/beego/orm"
+	_ "github.com/go-sql-driver/mysql"
 	"testing"
 )
 
+var isinit bool = false
+
 func InitDB() {
-	orm.RegisterDriver("mysql", orm.DR_MySQL)
-	orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
-	orm.RegisterModel(new(Config))
+	if !isinit {
+		orm.RegisterDriver("mysql", orm.DR_MySQL)
+		orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
+		orm.RegisterModel(new(Config))
+		isinit = true
+	}
 }
 
 func TestWhitelistAddSize(t *testing.T) {
