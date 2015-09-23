@@ -2,10 +2,16 @@ package soapparse
 
 import (
 	"encoding/xml"
+	"encoding/base64"
 	"errors"
 	"strings"
+
 	"github.com/ctripcorp/nephele/util/soapparse/request"
 	"github.com/ctripcorp/nephele/util/soapparse/response"
+)
+
+var (
+	b64 = base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 )
 
 var (
@@ -30,6 +36,9 @@ func EncReq(content []byte, req *request.Request) (err error) {
 	s := string(content)
 	s = strings.Replace(s, "&lt;", "<", -1)
 	s = strings.Replace(s, "&gt;", ">", -1)
+	xml.Unmarshal([]byte(s), &req)
+
+	req.SaveRequest.FileBytes = b64.EncodeToString([]byte(req.SaveRequest.FileBytes))
 	return xml.Unmarshal([]byte(s), &req)
 }
 

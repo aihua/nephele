@@ -1,7 +1,7 @@
 package request
 
 type SaveRequest struct {
-	FileBytes      []byte      `xml:"FileBytes"`
+	FileBytes      string      `xml:"FileBytes"`
 	FilePath       string      `xml:"FilePath"`
 	CheckItem      CheckItem   `xml:"CheckItem"`
 	OriginalFormat string      `xml:"OriginalFormat"`
