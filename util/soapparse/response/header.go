@@ -18,5 +18,5 @@ type Header struct {
 	SessionID                   string `xml:"SessionID,attr"`
 	Timestamp                   string `xml:"Timestamp,attro"`
 	TransNo                     string `xml:"TransNo,attr"`
-	Version                     string `xml:"Version.attr"`
+	Version                     string `xml:"Version,attr"`
 }
