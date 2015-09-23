@@ -3,7 +3,7 @@ package fdfs
 import (
 	"errors"
 	"fmt"
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/util"
 	"math/rand"
 	"strconv"
