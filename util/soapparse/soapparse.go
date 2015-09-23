@@ -11,8 +11,8 @@ import (
 var (
 	ReqPrefix    = []byte(`<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><Request xmlns="http://tempuri.org/"><requestXML>`)
 	ReqSuffix    = []byte(`</requestXML></Request></soap:Body></soap:Envelope>`)
-	RespPrefix   = []byte("<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><soap:Body><RequestResponse xmlns=\"http://tempuri.org/\"><RequestResult><?xml version=\"1.0\"?><Response>")
-	RespSuffix   = []byte("</Response></RequestResult></RequestResponse></soap:Body></soap:Envelope>")
+	RespPrefix   = []byte("<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><soap:Body><RequestResponse xmlns=\"http://tempuri.org/\"><RequestResult>&lt;?xml version=\"1.0\"?&gt;&lt;Response&gt;")
+	RespSuffix   = []byte("&lt;/Response&gt;</RequestResult></RequestResponse></soap:Body></soap:Envelope>")
 	ReqPrefixLen = len(ReqPrefix)
 	ReqSuffixLen = len(ReqSuffix)
 )
@@ -35,10 +35,17 @@ func EncReq(content []byte, req *request.Request) (err error) {
 
 func DecResp(header *response.Header, resp interface{}) ([]byte, error) {
 	var content []byte
+	var str string
 	headerContent, err := xml.MarshalIndent(&header, "", "\r")
 	respContent, err := xml.MarshalIndent(&resp, "", "\r")
-	content = append(RespPrefix, headerContent...)
-	content = append(content, respContent...)
+
+	content = append(headerContent, respContent...)
+
+	str = string(content)
+	str = strings.Replace(str, "<", "&lt;", -1)
+	str = strings.Replace(str, ">", "&gt;", -1)
+
+	content = append(RespPrefix, ([]byte(str))...)
 	content = append(content, RespSuffix...)
 	return content, err
 }
