@@ -203,13 +203,29 @@ func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZi
 }
 
 func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteResponse, util.Error) {
-	_, e := this.getStorage(r.FilePath)
+	storage, e := this.getStorage(r.FilePath)
 	if e.Err != nil {
 		return response.DeleteResponse{}, e
 	}
 
 	util.LogEvent(this.Cat, "ImageWs.DeleteRequest", GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
-	//delete
+
+	e = storage.Delete(r.IsDeleteAll)
+	if e.Err != nil {
+		return response.DeleteResponse{}, e
+	}
+
+	if isNewUri(r.FilePath) {
+		imgIndex := models.ImageIndex{}
+		e = imgIndex.ParseName(r.FilePath)
+		if e.Err != nil {
+			return response.DeleteResponse{}, e
+		}
+		e = imgIndex.Delete()
+		if e.Err != nil {
+			return response.DeleteResponse{}, e
+		}
+	}
 	return response.DeleteResponse{}, util.Error{}
 }
 

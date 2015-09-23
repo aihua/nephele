@@ -8,11 +8,13 @@ import (
 	"github.com/ctripcorp/nephele/util"
 	"io/ioutil"
 	"strings"
+	"os/exec"
 )
 
 type Storage interface {
 	Upload(bts []byte, fileExt string) (string, util.Error)
 	Download() ([]byte, util.Error)
+	Delete(isDeleteAll bool) (util.Error)
 	ConvertFilePath() util.Error
 }
 
@@ -21,6 +23,8 @@ var (
 	ERRORTYPE_FDFSCONNECTIONERR = "fdfs.connectionerr"
 	ERRORTYPE_FDFSDOWNLOADERR   = "fdfs.downloaderr"
 	ERRORTYPE_NFSDOWNLOADERR    = "nfs.downloaderr"
+	ERRORTYPE_FDFSDELETEERR     = "fdfs.deleteerr"
+	ERRORTYPE_NFSDELETEERR      = "nfs.deleteerr"
 
 	STORAGETYPE_FDFS = "fdfs"
 	STORAGETYPE_NFS  = "nfs"
@@ -91,6 +95,20 @@ func (this *FdfsStorage) Download() ([]byte, util.Error) {
 	return bts, util.Error{}
 }
 
+//fdfs ignore isDeleteAll
+func (this *FdfsStorage) Delete(isDeleteAll bool) (util.Error) {
+	if e := initFdfsClient(); e.Err != nil {
+		return e
+	}
+	var err error
+	err = fdfsClient.DeleteFile(this.Path)
+	if err != nil {
+		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDELETEERR}
+	}
+	return util.Error{}
+}
+
+
 func (this *FdfsStorage) ConvertFilePath() util.Error {
 	this.Path = strings.Replace(this.Path, "\\", "/", -1)
 	this.Path = util.Substr(this.Path, 4, len(this.Path)-4)
@@ -145,6 +163,24 @@ func (this *NfsStorage) Download() ([]byte, util.Error) {
 	}
 	return bts, util.Error{}
 }
+
+func (this *NfsStorage) Delete(isDeleteAll bool) (util.Error) {
+	var (
+		cmd *exec.Cmd
+		err error
+	)
+	if !isDeleteAll {
+		cmd = exec.Command("rm", this.Path)
+	} else {
+		cmd = exec.Command("rm", util.Substr(this.Path, 4, len(this.Path)-4)+"_*")
+	}
+	err = cmd.Run()
+	if err != nil {
+		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_NFSDELETEERR}
+	}
+	return util.Error{}
+}
+
 
 func (this *NfsStorage) ConvertFilePath() util.Error {
 	this.Path = strings.Replace(this.Path, "/", "\\", -1)

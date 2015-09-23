@@ -15,6 +15,7 @@ var (
 	ERRTYPE_GETIMAGEINDEX      = "GetImageIndex"
 	ERRORTYPE_INSERTIMAGEINDEX = "InsertImageIndex"
 	ERRORTYPE_INSERTIMAGEPLAN  = "InsertImagePlan"
+	ERRORTYPE_DELETEIMAGEINDEX = "DeleleImageIndex"
 	NEWIMAGENAMELENGTH         = 21
 	DEFAULTVERSION             = "0"
 )
@@ -82,8 +83,7 @@ func (this ImageIndex) GetImageName() string {
 }
 
 func (this *ImageIndex) Parse(imageName string) util.Error {
-	imgName := this.DropExtension(imageName)
-	if e := this.ParseName(imgName); e.Err != nil {
+	if e := this.ParseName(imageName); e.Err != nil {
 		return e
 	}
 	if e := this.GetStorage(); e.Err != nil {
@@ -95,7 +95,9 @@ func (this *ImageIndex) Parse(imageName string) util.Error {
 func (this *ImageIndex) DropExtension(imageName string) string {
 	return strings.Split(imageName, ".")[0]
 }
-func (this *ImageIndex) ParseName(imageName string) util.Error {
+
+func (this *ImageIndex) ParseName(imgName string) util.Error {
+	imageName := this.DropExtension(imgName)
 	if len(imageName) != NEWIMAGENAMELENGTH {
 		return util.Error{IsNormal: false, Err: errors.New("imagename length is invalid"), Type: ERRTYPE_IMAGENAMEINVALID}
 	}
@@ -124,6 +126,16 @@ func (this *ImageIndex) ParseName(imageName string) util.Error {
 	this.PartitionKey = int16(partitionKey)
 	this.TableZone = int(tableZone)
 	this.Version = version
+	return util.Error{}
+}
+
+func (this *ImageIndex) Delete() util.Error {
+	o := orm.NewOrm()
+	o.Using(getDBString(this.TableZone))
+	_, err := o.Raw("DELETE FROM `imageindex_"+strconv.Itoa(this.TableZone)+"WHERE idx = ? AND partitionKey = ?", this.Idx, this.PartitionKey).Exec()
+	if err != nil {
+		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_DELETEIMAGEINDEX}
+	}
 	return util.Error{}
 }
 
