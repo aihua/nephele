@@ -51,8 +51,8 @@ func EncReq(content []byte, req *request.Request) (err error) {
 func DecResp(header *response.Header, resp interface{}) ([]byte, error) {
 	var content []byte
 	var str string
-	headerContent, err := xml.MarshalIndent(&header, "", "\r")
-	respContent, err := xml.MarshalIndent(&resp, "", "\r")
+	headerContent, err := xml.MarshalIndent(&header, "", "")
+	respContent, err := xml.MarshalIndent(&resp, "", "")
 
 	content = append(headerContent, respContent...)
 
