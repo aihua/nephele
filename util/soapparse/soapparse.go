@@ -38,7 +38,10 @@ func EncReq(content []byte, req *request.Request) (err error) {
 	s = strings.Replace(s, "&gt;", ">", -1)
 	xml.Unmarshal([]byte(s), &req)
 
-	req.SaveRequest.FileBytes = b64.EncodeToString([]byte(req.SaveRequest.FileBytes))
+	req.SaveRequest.FileBytes, err = b64.DecodeString(string(req.SaveRequest.FileBytes))
+	if err != nil {
+		return err
+	}
 	return xml.Unmarshal([]byte(s), &req)
 }
 
