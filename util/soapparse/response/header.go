@@ -16,7 +16,7 @@ type Header struct {
 	ResultMsg                   string `xml:"ResultMsg,attr"`
 	ResultNo                    string `xml:"ResultNo,attr"`
 	SessionID                   string `xml:"SessionID,attr"`
-	Timestamp                   string `xml:"Timestamp,attro"`
+	Timestamp                   string `xml:"Timestamp,attr"`
 	TransNo                     string `xml:"TransNo,attr"`
 	Version                     string `xml:"Version,attr"`
 }
