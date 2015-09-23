@@ -36,13 +36,16 @@ func EncReq(content []byte, req *request.Request) (err error) {
 	s := string(content)
 	s = strings.Replace(s, "&lt;", "<", -1)
 	s = strings.Replace(s, "&gt;", ">", -1)
-	xml.Unmarshal([]byte(s), &req)
+	err = xml.Unmarshal([]byte(s), &req)
+	if err != nil {
+		return err
+	}
 
 	req.SaveRequest.FileBytes, err = b64.DecodeString(string(req.SaveRequest.FileBytes))
 	if err != nil {
 		return err
 	}
-	return xml.Unmarshal([]byte(s), &req)
+	return nil
 }
 
 func DecResp(header *response.Header, resp interface{}) ([]byte, error) {
