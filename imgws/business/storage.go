@@ -2,20 +2,22 @@ package business
 
 import (
 	"errors"
+	"fmt"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/fdfs"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
 	"io/ioutil"
-	"strings"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 type Storage interface {
 	Upload(bts []byte, fileExt string) (string, util.Error)
 	Download() ([]byte, util.Error)
-	Delete(isDeleteAll bool) (util.Error)
-	ConvertFilePath() util.Error
+	Delete(isDeleteAll bool) util.Error
+	ConvertFilePath(isSource bool) util.Error
 }
 
 var (
@@ -56,13 +58,15 @@ var (
 	uploadcount int = 0
 	count           = 0
 	lock            = make(chan int, 1)
+	CATTITLE        = "ImageWS.Storage"
 )
 
 func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
-	if e := initFdfsClient(); e.Err != nil {
+	if e := this.initFdfsClient(); e.Err != nil {
 		return "", e
 	}
-	groups, e := models.GetGroups()
+	config := models.Config{Cat: this.Cat}
+	groups, e := config.GetGroups()
 	if e.Err != nil {
 		return "", e
 	}
@@ -72,52 +76,96 @@ func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error)
 	i := uploadcount % len(groups)
 	uploadcount = 0
 	g := groups[i]
+
+	var result util.Error = util.Error{}
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Upload")
+		defer func() {
+			if result.Err != nil && result.IsNormal {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	path, err := fdfsClient.UploadByBuffer(g, bts, fileExt)
 	if err != nil {
-		return "", util.Error{IsNormal: true, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
+		result = util.Error{IsNormal: true, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
+		return "", result
 	}
-	return path, util.Error{}
+	return path, result
 }
 
 func (this *FdfsStorage) Download() ([]byte, util.Error) {
-	if e := initFdfsClient(); e.Err != nil {
+	if e := this.initFdfsClient(); e.Err != nil {
 		return nil, e
 	}
 	var (
-		bts []byte
-		err error
+		bts    []byte
+		err    error
+		result = util.Error{}
 	)
 
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Download")
+		defer func() {
+			if result.Err != nil && result.IsNormal {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	bts, err = fdfsClient.DownloadToBuffer(this.Path, this.Cat)
 	if err != nil {
-		return []byte{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDOWNLOADERR}
+		result = util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDOWNLOADERR}
+		return []byte{}, result
 	}
-	return bts, util.Error{}
+	return bts, result
 }
 
 //fdfs ignore isDeleteAll
-func (this *FdfsStorage) Delete(isDeleteAll bool) (util.Error) {
-	if e := initFdfsClient(); e.Err != nil {
+func (this *FdfsStorage) Delete(isDeleteAll bool) util.Error {
+	if e := this.initFdfsClient(); e.Err != nil {
 		return e
 	}
-	var err error
+	var (
+		err    error
+		result = util.Error{}
+	)
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Download")
+		defer func() {
+			if result.Err != nil && result.IsNormal {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	err = fdfsClient.DeleteFile(this.Path)
 	if err != nil {
-		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDELETEERR}
+		result = util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDELETEERR}
+		return result
 	}
-	return util.Error{}
+	return result
 }
 
-
-func (this *FdfsStorage) ConvertFilePath() util.Error {
+func (this *FdfsStorage) ConvertFilePath(isSource bool) util.Error {
 	this.Path = strings.Replace(this.Path, "\\", "/", -1)
 	this.Path = util.Substr(this.Path, 4, len(this.Path)-4)
 	index := strings.Index(this.Path, "/")
 	this.Path = util.Substr(this.Path, index+1, len(this.Path)-index-1)
+	if isSource {
+		this.Path = strings.Replace(this.Path, ".", "_source.", -1)
+	}
 	return util.Error{}
 }
 
-func initFdfsClient() util.Error {
+func (this *FdfsStorage) initFdfsClient() util.Error {
 	if fdfsClient == nil {
 		lock <- 1
 		defer func() {
@@ -126,11 +174,12 @@ func initFdfsClient() util.Error {
 		if fdfsClient != nil {
 			return util.Error{}
 		}
-		fdfsdomain, e := models.GetFdfsDomain()
+		config := models.Config{Cat: this.Cat}
+		fdfsdomain, e := config.GetFdfsDomain()
 		if e.Err != nil {
 			return e
 		}
-		fdfsport, e := models.GetFdfsPort()
+		fdfsport, e := config.GetFdfsPort()
 		if e.Err != nil {
 			return e
 		}
@@ -157,6 +206,17 @@ func (this *NfsStorage) Download() ([]byte, util.Error) {
 		bts []byte
 		err error
 	)
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Nfs.Download")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	bts, err = ioutil.ReadFile(this.Path)
 	if err != nil {
 		return []byte{}, util.Error{IsNormal: false, Err: errors.New("download file failed!"), Type: ERRORTYPE_NFSDOWNLOADERR}
@@ -164,11 +224,22 @@ func (this *NfsStorage) Download() ([]byte, util.Error) {
 	return bts, util.Error{}
 }
 
-func (this *NfsStorage) Delete(isDeleteAll bool) (util.Error) {
+func (this *NfsStorage) Delete(isDeleteAll bool) util.Error {
 	var (
 		cmd *exec.Cmd
 		err error
 	)
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Nfs.Delete")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	if !isDeleteAll {
 		cmd = exec.Command("rm", this.Path)
 	} else {
@@ -181,15 +252,15 @@ func (this *NfsStorage) Delete(isDeleteAll bool) (util.Error) {
 	return util.Error{}
 }
 
-
-func (this *NfsStorage) ConvertFilePath() util.Error {
+func (this *NfsStorage) ConvertFilePath(isSource bool) util.Error {
 	this.Path = strings.Replace(this.Path, "/", "\\", -1)
 
+	config := models.Config{Cat: this.Cat}
 	if this.isT1() {
 		this.Path = util.Substr(this.Path, 4, len(this.Path)-4)
 		index := strings.Index(this.Path, "\\")
 		channel := util.Substr(this.Path, 0, index)
-		nfs, e := models.GetNfsPath(channel)
+		nfs, e := config.GetNfsPath(channel)
 		if e.Err != nil {
 			return e
 		}
@@ -198,7 +269,7 @@ func (this *NfsStorage) ConvertFilePath() util.Error {
 	} else {
 		index := strings.Index(this.Path, "\\")
 		channel := util.Substr(this.Path, 1, index)
-		nfs, e := models.GetNfsT1Path(channel)
+		nfs, e := config.GetNfsT1Path(channel)
 		if e.Err != nil {
 			return e
 		}
@@ -206,6 +277,9 @@ func (this *NfsStorage) ConvertFilePath() util.Error {
 		this.Path = shading(nfs) + this.Path
 	}
 	this.Path = strings.Replace(this.Path, "\\", "/", -1)
+	if isSource {
+		this.Path = strings.Replace(this.Path, "\\target\\", "\\source\\", -1)
+	}
 	return util.Error{}
 }
 

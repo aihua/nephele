@@ -1,14 +1,11 @@
 package business
 
 import (
-	_ "github.com/astaxie/beego/orm"
-	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"testing"
 )
 
 func TestFDFSUpload(t *testing.T) {
-	InitDBForTest()
 	bts, err := ioutil.ReadFile("111.png")
 	if err != nil {
 		t.Error(err)

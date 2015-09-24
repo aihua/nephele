@@ -16,4 +16,5 @@ func init() {
 	beego.Include(&controllers.ImageDeleteController{})
 	beego.Include(&controllers.ConfigController{})
 	beego.Include(&controllers.ChannelController{})
+	beego.Include(&controllers.ViewController{})
 }

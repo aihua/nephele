@@ -30,9 +30,9 @@ func (this *ChannelController) Add() {
 // @router /channel/get/ [get]
 func (this *ChannelController) Get() {
 	ch := models.Channel{}
-	channels, err := ch.Get()
-	if err != nil {
-		this.Ctx.WriteString(err.Error())
+	channels, err := ch.GetChannels()
+	if err.Err != nil {
+		this.Ctx.WriteString((err.Err.(error)).Error())
 	} else {
 		bts, _ := json.Marshal(channels)
 		this.Ctx.WriteString(string(bts))
@@ -47,7 +47,7 @@ func (this *ChannelController) Update() {
 		this.Ctx.WriteString("params is't empty")
 	}
 	channel := models.Channel{Name: name, Code: code}
-	err := channel.Upload()
+	err := channel.Update()
 	if err != nil {
 		this.Ctx.WriteString(err.Error())
 	} else {

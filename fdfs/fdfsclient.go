@@ -1,7 +1,7 @@
 package fdfs
 
 import (
-	"errors"
+	//"errors"
 	"fmt"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/util"
@@ -61,9 +61,9 @@ func NewFdfsClient(trackerHosts []string, trackerPort string) (FdfsClient, error
 }
 
 func (this *fdfsClient) DownloadToBuffer(fileId string, catInstance cat.Cat) ([]byte, error) {
-	if catInstance == nil {
-		return nil, errors.New("cat instance transferred to fdfs is nil")
-	}
+	//if catInstance == nil {
+	//	return nil, errors.New("cat instance transferred to fdfs is nil")
+	//}
 	buff, err := this.downloadToBufferByOffset(fileId, 0, 0, catInstance)
 	if err != nil {
 		return nil, err
@@ -146,9 +146,11 @@ func (this *fdfsClient) downloadToBufferByOffset(fileId string, offset int64, do
 	if err != nil {
 		return nil, err
 	}
-	event := catInstance.NewEvent("ImgFromStorage", fmt.Sprintf("%s:%s", storeInfo.groupName, storeInfo.ipAddr))
-	event.SetStatus("0")
-	event.Complete()
+	if catInstance != nil {
+		event := catInstance.NewEvent("ImgFromStorage", fmt.Sprintf("%s:%s", storeInfo.groupName, storeInfo.ipAddr))
+		event.SetStatus("0")
+		event.Complete()
+	}
 
 	//get a storage client from storage map, if not exist, create a new storage client
 	storeClient, err := this.getStorage(storeInfo.ipAddr, storeInfo.port)

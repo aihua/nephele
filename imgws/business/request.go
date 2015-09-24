@@ -3,10 +3,10 @@ package business
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
+	"github.com/ctripcorp/nephele/util/soapparse"
 	"github.com/ctripcorp/nephele/util/soapparse/request"
 	"github.com/ctripcorp/nephele/util/soapparse/response"
 	"image"
@@ -30,6 +30,7 @@ type ImageRequest struct {
 }
 
 func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, util.Error) {
+	r.TargetFormat = strings.ToLower(r.TargetFormat)
 	r.Channel = strings.ToLower(r.Channel)
 	util.LogEvent(this.Cat, "ImageWs.SaveRequest", r.Channel, nil)
 
@@ -46,10 +47,10 @@ func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, ut
 		return response.SaveResponse{}, e
 	}
 	tableZone := sharding()
-	imgIndex := models.ImageIndex{Channel: GetChannelCode(r.Channel), StoragePath: path, StorageType: storageType, TableZone: tableZone}
+	channel := models.Channel{Cat: this.Cat}
+	imgIndex := models.ImageIndex{Channel: channel.GetChannelCode(r.Channel), StoragePath: path, StorageType: storageType, TableZone: tableZone, Cat: this.Cat}
 	plan := ""
 	if r.Process.AnyTypes != nil && len(r.Process.AnyTypes) > 0 {
-		fmt.Println(len(r.Process.AnyTypes))
 		bts, err := r.Process.MarshalJSON()
 		if err != nil {
 			return response.SaveResponse{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_MARSHALJSON}
@@ -95,16 +96,17 @@ func (this ImageRequest) checkSaveRequest(r *request.SaveRequest) util.Error {
 	if r.Channel == "" {
 		return util.Error{IsNormal: true, Err: errors.New("Channel can't be empty"), Type: t}
 	}
-	if r.FileBytes == nil && len(r.FileBytes) < 1 {
+	if r.FileBytes == nil || len(r.FileBytes) < 1 {
 		return util.Error{IsNormal: true, Err: errors.New("FIleBytes can't be empty"), Type: t}
 	}
-	m, err := GetChannels()
+	channel := models.Channel{Cat: this.Cat}
+	m, err := channel.GetChannels()
 	if err.Err != nil {
 		return err
 	}
 	_, exists := m[r.Channel]
 	if !exists {
-		return util.Error{IsNormal: true, Err: errors.New("channel is invalid!"), Type: t}
+		return util.Error{IsNormal: true, Err: errors.New(util.JoinString("channel[", r.Channel, "] is invalid!")), Type: t}
 	}
 	return util.Error{}
 }
@@ -121,7 +123,6 @@ func (this ImageRequest) checkSaveCheckItem(r *request.SaveRequest) util.Error {
 	} else {
 		img, _, err := image.Decode(bytes.NewReader(r.FileBytes))
 		if err != nil {
-			fmt.Println("----------------")
 			return util.Error{IsNormal: false, Err: err, Type: t}
 		}
 		//todo check img format
@@ -144,17 +145,18 @@ func isSvg(bts []byte) bool {
 }
 
 func (this ImageRequest) Download(r *request.LoadImgRequest) (response.LoadImgResponse, util.Error) {
-	storage, e := this.getStorage(r.FilePath)
+	storage, e := this.getStorageBySource(r.FilePath, r.IsSource)
 	if e.Err != nil {
 		return response.LoadImgResponse{}, e
 	}
 
-	util.LogEvent(this.Cat, "ImageWs.DownloadRequest", GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath})
+	util.LogEvent(this.Cat, "ImageWs.DownloadRequest", this.GetChannel(r.FilePath), map[string]string{"uri": r.FilePath})
 
 	bts, e := storage.Download()
 	if e.Err != nil {
 		return response.LoadImgResponse{}, e
 	}
+	bts = []byte(soapparse.B64.EncodeToString(bts))
 	return response.LoadImgResponse{FileBytes: bts}, util.Error{}
 }
 
@@ -177,16 +179,16 @@ func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZi
 
 	files := make(map[string][]byte)
 	for _, file := range r.Files.LoadFiles {
-		name := file.FilePath
+		name := path.Base(strings.Replace(file.FilePath, "\\", "/", -1))
 		if len(file.Rename) > 0 {
 			name = file.Rename + path.Ext(file.FilePath)
 		}
-		storage, e := this.getStorage(name)
+		storage, e := this.getStorageBySource(file.FilePath, file.IsSource)
 		if e.Err != nil {
 			result = e
 			return response.LoadZipResponse{}, e
 		}
-		util.LogEvent(this.Cat, "ImageWs.DownloadZipRequest", GetChannelCode(file.FilePath), map[string]string{"uri": file.FilePath})
+		util.LogEvent(this.Cat, "ImageWs.DownloadZipRequest", this.GetChannel(file.FilePath), map[string]string{"uri": file.FilePath})
 		bts, e := storage.Download()
 		if e.Err != nil {
 			result = e
@@ -199,6 +201,7 @@ func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZi
 		result = e
 		return response.LoadZipResponse{}, e
 	}
+	bts = []byte(soapparse.B64.EncodeToString(bts))
 	return response.LoadZipResponse{FileBytes: bts}, util.Error{}
 }
 
@@ -207,8 +210,8 @@ func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteRespon
 	if e.Err != nil {
 		return response.DeleteResponse{}, e
 	}
-
-	util.LogEvent(this.Cat, "ImageWs.DeleteRequest", GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
+	channel := models.Channel{Cat: this.Cat}
+	util.LogEvent(this.Cat, "ImageWs.DeleteRequest", channel.GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
 
 	e = storage.Delete(r.IsDeleteAll)
 	if e.Err != nil {
@@ -229,7 +232,7 @@ func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteRespon
 	return response.DeleteResponse{}, util.Error{}
 }
 
-func (this ImageRequest) getStorage(path string) (Storage, util.Error) {
+func (this ImageRequest) getStorageBySource(path string, isSource bool) (Storage, util.Error) {
 	path = strings.Replace(path, "/", "\\", -1)
 	var (
 		storagePath string
@@ -255,18 +258,23 @@ func (this ImageRequest) getStorage(path string) (Storage, util.Error) {
 			storageType = STORAGETYPE_FDFS
 		}
 		storage = CreateStorage(path, storageType, this.Cat)
-		if e := storage.ConvertFilePath(); e.Err != nil {
+		if e := storage.ConvertFilePath(isSource); e.Err != nil {
 			return nil, e
 		}
 	}
 	return storage, util.Error{}
 }
 
-func GetChannel(path string) string {
+func (this ImageRequest) getStorage(path string) (Storage, util.Error) {
+	return this.getStorageBySource(path, false)
+}
+
+func (this ImageRequest) GetChannel(path string) string {
 	path = strings.Replace(path, "/", "\\", -1)
 	if isNewUri(path) {
 		channelCode := util.Substr(path, 1, 2)
-		channels, _ := GetChannels()
+		channel := models.Channel{Cat: this.Cat}
+		channels, _ := channel.GetChannels()
 		for k, v := range channels {
 			if v == channelCode {
 				return k

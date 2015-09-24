@@ -16,7 +16,7 @@ import (
 type ImageWS struct{}
 
 var (
-	RESULTCODE_SUCCESS      = "Sucess"
+	RESULTCODE_SUCCESS      = "Success"
 	RESULTCODE_FALI         = "Fail"
 	REQUESTTYPE_SAVEIMAGE   = "Arch.Base.ImageWS.SaveImage"
 	REQUESTTYPE_DELETEIMAGE = "Arch.Base.ImageWS.DeleteImage"
@@ -27,7 +27,7 @@ var (
 func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/xml")
 
 	Cat := cat.Instance()
 	tran := Cat.NewTransaction("ImageWS.URL", "ImageWs")
@@ -52,13 +52,13 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, msg)
 		return
 	}
-
 	req := request.Request{}
 	if err := soapparse.EncReq(bts, &req); err != nil {
 		util.LogErrorEvent(Cat, "SoapParseRequestError", err.Error())
 		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseRequestError"}
 		content := []byte("SoapParseRequestError")
 		writeResponse(w, content)
+
 		return
 	}
 	var (
@@ -95,19 +95,24 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e = util.Error{IsNormal: true, Err: errors.New("requesttype is invalid!"), Type: "RequestTypeInvalid"}
 	}
 	if e.Err != nil {
+		fmt.Println(e.Err)
 		result = e
 		header = createFailHeader(req.Header, fmt.Sprintf("%v", e.Err))
 	} else {
 		header = transformHeader(req.Header, RESULTCODE_SUCCESS, "")
 	}
-	content, err := soapparse.DecResp(header, resp)
+
+	content, err := soapparse.DecResp(header, resp) //
 	if err != nil {
+		fmt.Println(err)
 		util.LogErrorEvent(Cat, "SoapParseResponseError", err.Error())
 		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseResponseError"}
 		msg := []byte(err.Error())
 		writeResponse(w, msg)
 		return
 	}
+
+	//fmt.Println(string(content))
 	writeResponse(w, content)
 }
 
@@ -132,6 +137,7 @@ func transformHeader(r request.Header, resultcode string, resultmsg string) *res
 	header.ServerIP = util.GetIP()
 	header.ShouldRecordPerformanceTime = false //todo
 	header.UserID = r.UserID
+	header.ResultMsg = resultmsg
 	//TODO
 	return &header
 }

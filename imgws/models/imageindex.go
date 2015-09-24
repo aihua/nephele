@@ -1,9 +1,11 @@
 package models
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/astaxie/beego/orm"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/util"
 	"strconv"
 	"strings"
@@ -16,6 +18,7 @@ var (
 	ERRORTYPE_INSERTIMAGEINDEX = "InsertImageIndex"
 	ERRORTYPE_INSERTIMAGEPLAN  = "InsertImagePlan"
 	ERRORTYPE_DELETEIMAGEINDEX = "DeleleImageIndex"
+	DBTITLE                    = "ImageWS.DB"
 	NEWIMAGENAMELENGTH         = 21
 	DEFAULTVERSION             = "0"
 )
@@ -29,6 +32,7 @@ type ImageIndex struct {
 	PartitionKey int16
 	TableZone    int
 	Version      string
+	Cat          cat.Cat
 }
 
 func getDBString(tableZone int) string {
@@ -40,32 +44,61 @@ func getExt(path string) string {
 }
 
 func (this *ImageIndex) SaveToDB(plan string) util.Error {
+	var (
+		res sql.Result
+		err error
+		id  int64
+	)
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "ImageIndex.Insert")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
+
 	o := orm.NewOrm()
 	o.Using(getDBString(this.TableZone))
 	o.Begin()
 	partitionKey := util.GetPartitionKey(time.Now())
-	res, err := o.Raw("INSERT INTO `imageindex_"+strconv.Itoa(this.TableZone)+"` (`channel`,`storagePath`,`storageType`,`profile`,`createtime`,`partitionKey`)VALUES(?,?,?,?,NOW(),?)", this.Channel, this.StoragePath, this.StorageType, this.Profile, partitionKey).Exec()
+	res, err = o.Raw("INSERT INTO `imageindex_"+strconv.Itoa(this.TableZone)+"` (`channel`,`storagePath`,`storageType`,`profile`,`createtime`,`partitionKey`)VALUES(?,?,?,?,NOW(),?)", this.Channel, this.StoragePath, this.StorageType, this.Profile, partitionKey).Exec()
+
 	if err != nil {
 		o.Rollback()
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEINDEX}
 	}
-	id, err := res.LastInsertId()
+	id, err = res.LastInsertId()
 	if err != nil {
 		o.Rollback()
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEINDEX}
 	}
 	if plan != "" {
-		res, err := o.Raw("INSERT INTO `imageplan_"+strconv.Itoa(this.TableZone)+"`(imgIdx,plan,partitionKey)VALUES(?,?,?)", id, plan, partitionKey).Exec()
+		if this.Cat != nil {
+			tran := this.Cat.NewTransaction(DBTITLE, "ImagePlan.Insert")
+			defer func() {
+				if err != nil {
+					tran.SetStatus(err)
+				} else {
+					tran.SetStatus("0")
+				}
+				tran.Complete()
+			}()
+		}
+		res, err = o.Raw("INSERT INTO `imageplan_"+strconv.Itoa(this.TableZone)+"`(imgIdx,plan,partitionKey)VALUES(?,?,?)", id, plan, partitionKey).Exec()
 		if err != nil {
 			o.Rollback()
 			return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEPLAN}
 		}
-		if _, err := res.RowsAffected(); err != nil {
+		if _, err = res.RowsAffected(); err != nil {
 			o.Rollback()
 			return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEPLAN}
 		}
 	}
-	if err := o.Commit(); err != nil {
+	if err = o.Commit(); err != nil {
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_INSERTIMAGEINDEX}
 	}
 	this.Idx = id
@@ -93,6 +126,8 @@ func (this *ImageIndex) Parse(imageName string) util.Error {
 }
 
 func (this *ImageIndex) DropExtension(imageName string) string {
+	imageName = strings.Replace(imageName, "\\", "", -1)
+	imageName = strings.Replace(imageName, "/", "", -1)
 	return strings.Split(imageName, ".")[0]
 }
 
@@ -130,9 +165,21 @@ func (this *ImageIndex) ParseName(imgName string) util.Error {
 }
 
 func (this *ImageIndex) Delete() util.Error {
+	var err error
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "ImageIndex.Delete")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	o := orm.NewOrm()
 	o.Using(getDBString(this.TableZone))
-	_, err := o.Raw("DELETE FROM `imageindex_"+strconv.Itoa(this.TableZone)+"WHERE idx = ? AND partitionKey = ?", this.Idx, this.PartitionKey).Exec()
+	_, err = o.Raw("DELETE FROM `imageindex_"+strconv.Itoa(this.TableZone)+"` WHERE idx = ? AND partitionKey = ?", this.Idx, this.PartitionKey).Exec()
 	if err != nil {
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_DELETEIMAGEINDEX}
 	}
@@ -143,19 +190,37 @@ func (this *ImageIndex) GetStorage() util.Error {
 	if this.Idx < 1 || this.TableZone < 1 || this.PartitionKey < 1 {
 		return util.Error{IsNormal: true, Err: errors.New("getimageindex parameters is invalid"), Type: ERRTYPE_GETIMAGEINDEX}
 	}
+	var result util.Error = util.Error{}
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "ImageIndex.GetStorage")
+		defer func() {
+			if result.Err != nil {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.AddData("TabeZone", strconv.Itoa(this.TableZone))
+			tran.AddData("Idx", strconv.FormatInt(this.Idx, 10))
+			tran.AddData("PartitionKey", strconv.Itoa(int(this.PartitionKey)))
+			tran.Complete()
+		}()
+	}
+
 	o := orm.NewOrm()
 	o.Using(getDBString(this.TableZone))
 	res := make(orm.Params)
 	nums, err := o.Raw(util.JoinString("SELECT storagepath,storagetype FROM imageindex_", strconv.Itoa(this.TableZone), " WHERE idx=? AND partitionKey=?"), this.Idx, this.PartitionKey).RowsToMap(&res, "storagepath", "storagetype")
 	if err != nil {
-		return util.Error{IsNormal: false, Err: err, Type: ERRTYPE_GETIMAGEINDEX}
+		result = util.Error{IsNormal: false, Err: err, Type: ERRTYPE_GETIMAGEINDEX}
+		return result
 	}
 	if nums < 1 {
-		return util.Error{IsNormal: false, Err: errors.New("idx is't exists"), Type: ERRTYPE_GETIMAGEINDEX}
+		result = util.Error{IsNormal: false, Err: errors.New("idx is't exists"), Type: ERRTYPE_GETIMAGEINDEX}
+		return result
 	}
 	for k, v := range res {
 		this.StoragePath = k
 		this.StorageType = fmt.Sprintf("%v", v)
 	}
-	return util.Error{}
+	return result
 }

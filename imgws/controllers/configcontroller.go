@@ -29,8 +29,8 @@ func (this *ConfigController) Add() {
 func (this *ConfigController) Get() {
 	channel := this.GetString("channel")
 	key := this.GetString("key")
-
-	m, e := models.GetConfigs()
+	config := models.Config{}
+	m, e := config.GetConfigs()
 	if e.Err != nil {
 		this.Ctx.WriteString(fmt.Sprintf("%v", e.Err))
 	}

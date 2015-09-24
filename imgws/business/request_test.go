@@ -37,6 +37,7 @@ func TestCheckSaveCheckItem(t *testing.T) {
 		t.Error(err)
 	}
 	r.SaveRequest.FileBytes = bts
+	fmt.Println("------------------" + strconv.Itoa(len(bts)))
 	//check issvg
 	r.SaveRequest.CheckItem.IsOtherImage = true
 	imgRequest := ImageRequest{}
@@ -98,25 +99,26 @@ func TestT1(t *testing.T) {
 
 func TestGetStorage(t *testing.T) {
 	newimageuri := "\\100208000000000108D30.jpg"
-	_, e := GetStorage(newimageuri)
+	imgRequest := ImageRequest{}
+	_, e := imgRequest.getStorage(newimageuri)
 	if e.Err != nil {
 		t.Error(e.Err)
 	}
 
 	fdfsuri := "/fd/hotel/group1/M01/6C/36/CgIZH1YAwemAUhVrAAMwrelaA5k766.png"
-	_, e = GetStorage(fdfsuri)
+	_, e = imgRequest.getStorage(fdfsuri)
 	if e.Err != nil {
 		t.Error(e.Err)
 	}
 
 	t1uri := "/t1/headphoto/057/777/943/0b93f8268d5546308915f4f9fcaa9483.jpg"
-	_, e = GetStorage(t1uri)
+	_, e = imgRequest.getStorage(t1uri)
 	if e.Err != nil {
 		t.Error(e.Err)
 	}
 
 	uri := "/tg/057/777/943/0b93f8268d5546308915f4f9fcaa9483.jpg"
-	_, e = GetStorage(uri)
+	_, e = imgRequest.getStorage(uri)
 	if e.Err != nil {
 		t.Error(e.Err)
 	}

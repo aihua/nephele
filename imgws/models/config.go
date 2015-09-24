@@ -1,9 +1,10 @@
 package models
 
 import (
+	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/astaxie/beego/orm"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/util"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ var (
 	ErrDuplicatedRecord = errors.New("duplicated records exist")
 	ErrSizeExisted      = errors.New("size already existed")
 	ErrNoRecord         = errors.New("no record found")
+	ErrHasBeenModified  = errors.New("Has been modified")
 
 	ERRORTYPE_GETCONFIGS     = "GetConfig"
 	ERRORTYPE_CONFIGNOEXISTS = "ConfigNoExists"
@@ -45,6 +47,7 @@ type Config struct {
 	//Inconsistent Fields
 	Value      string
 	Recordtime string
+	Cat        cat.Cat
 }
 
 func getNow() string {
@@ -52,8 +55,28 @@ func getNow() string {
 }
 func (this *Config) Insert() error {
 	this.Recordtime = getNow()
+	var (
+		err error
+		id  int64
+		res sql.Result
+	)
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "Config.Insert")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	o := orm.NewOrm()
-	id, err := o.Insert(this)
+	res, err = o.Raw("INSERT INTO config(channel,`key`,value,recordTime)VALUES(?,?,?,?)", this.Channel, this.Key, this.Value, this.Recordtime).Exec()
+	if err != nil {
+		return err
+	}
+	id, err = res.LastInsertId()
 	if err != nil {
 		return err
 	}
@@ -62,9 +85,22 @@ func (this *Config) Insert() error {
 }
 
 func (this *Config) UpdateValue() error {
+	var err error
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "Config.Update")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
+
 	o := orm.NewOrm()
 	now := getNow()
-	_, err := o.Raw("UPDATE config SET value=?, recordtime=? WHERE channel=? AND `key`=?", this.Value, now, this.Channel, this.Key).Exec()
+	_, err = o.Raw("UPDATE config SET value=?, recordtime=? WHERE channel=? AND `key`=?", this.Value, now, this.Channel, this.Key).Exec()
 	if err != nil {
 		return err
 	}
@@ -74,24 +110,33 @@ func (this *Config) UpdateValue() error {
 func (this *Config) GetSizes() (string, error) {
 	this.Key = "sizes"
 	var (
-		configs []Config
-		sql     string
+		num int64
+		err error
 	)
 
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "Config.GetSizes")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	o := orm.NewOrm()
-	o.Using("default")
-
-	sql = fmt.Sprintf("SELECT * FROM config WHERE `channel` = '%s' AND `key` = '%s'", this.Channel, this.Key)
-	num, err := o.Raw(sql).QueryRows(&configs)
+	var maps []orm.Params
+	num, err = o.Raw("SELECT value,recordTime FROM config WHERE `channel` = ? AND `key` = ?", this.Channel, this.Key).Values(&maps)
 	if err != nil {
 		return EmptyString, err
 	}
 	if num == 0 {
 		return EmptyString, ErrNoRecord
 	} else if num == 1 {
-		this.Value = configs[0].Value
-		this.Recordtime = configs[0].Recordtime
-		return configs[0].Value, nil
+		this.Value = maps[0]["value"].(string)
+		this.Recordtime = maps[0]["recordTime"].(string)
+		return this.Value, nil
 	} else {
 		return EmptyString, ErrDuplicatedRecord
 	}
@@ -101,29 +146,34 @@ func (this *Config) GetSizes() (string, error) {
 func (this *Config) AddSize(size string) error {
 	this.Key = "sizes"
 	var (
-		configs []Config
-		sql     string
+		result sql.Result
+		err    error
+		num    int64
 	)
-
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(DBTITLE, "Config.AddSizes")
+		defer func() {
+			if err != nil {
+				tran.SetStatus(err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
 	o := orm.NewOrm()
-	o.Using("default")
-
-	sql = fmt.Sprintf("SELECT * FROM config WHERE `channel` = '%s' AND `key` = '%s'", this.Channel, this.Key)
-	num, err := o.Raw(sql).QueryRows(&configs)
+	var maps []orm.Params
+	num, err = o.Raw("SELECT * FROM config WHERE `channel` = ? AND `key` = ?", this.Channel, this.Key).Values(&maps)
 	if err != nil {
 		return err
 	}
 	if num == 0 {
 		this.Value = size
-		this.Recordtime = strconv.FormatInt(time.Now().UnixNano(), 10)
-		id, err := o.Insert(this)
-		if err != nil {
-			return err
-		}
-		this.Id = id
-		return nil
+		this.Recordtime = getNow()
+		err = this.Insert()
+		return err
 	} else if num == 1 {
-		sizes := strings.Split(configs[0].Value, ",")
+		sizes := strings.Split(maps[0]["value"].(string), ",")
 		isExisted := false
 		for _, t := range sizes {
 			if t == size {
@@ -131,18 +181,22 @@ func (this *Config) AddSize(size string) error {
 			}
 		}
 		if isExisted {
-			return ErrSizeExisted
+			err = ErrSizeExisted
+			return err
 		} else {
-			newValue := configs[0].Value + "," + size
-			newRecordtime := strconv.FormatInt(time.Now().UnixNano(), 10)
+			newValue := maps[0]["value"].(string) + "," + size
+			newRecordtime := getNow()
 
-			sql = fmt.Sprintf("UPDATE config set `value` = '%s', `recordtime` = '%s' "+
-				"WHERE `channel` = '%s' AND `key` = '%s' AND `recordtime` = '%s'",
-				newValue, newRecordtime,
-				configs[0].Channel, configs[0].Key, configs[0].Recordtime)
-
-			_, err := o.Raw(sql).Exec()
+			result, err = o.Raw("UPDATE config set `value` = ?, `recordtime` = ? WHERE `channel` = ? AND `key` = ? AND `recordtime` = ?", newValue, newRecordtime, this.Channel, this.Key, maps[0]["recordTime"]).Exec()
 			if err != nil {
+				return err
+			}
+			num, err = result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if num < 1 {
+				err = ErrHasBeenModified
 				return err
 			}
 			this.Value = newValue
@@ -154,11 +208,23 @@ func (this *Config) AddSize(size string) error {
 	}
 }
 
-func GetConfigs() (map[string]map[string]string, util.Error) {
+func (this *Config) GetConfigs() (map[string]map[string]string, util.Error) {
 	if len(config) < 1 || isRefresh(getConfigTime) {
+		var err error
+		if this.Cat != nil {
+			tran := this.Cat.NewTransaction(DBTITLE, "Config.GetConfigs")
+			defer func() {
+				if err != nil {
+					tran.SetStatus(err)
+				} else {
+					tran.SetStatus("0")
+				}
+				tran.Complete()
+			}()
+		}
 		o := orm.NewOrm()
 		var configs []Config
-		_, err := o.Raw("SELECT channel,`key`,value FROM config").QueryRows(&configs)
+		_, err = o.Raw("SELECT channel,`key`,value FROM config").QueryRows(&configs)
 		if err != nil {
 			return nil, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_GETCONFIGS}
 		}
@@ -183,8 +249,8 @@ func isRefresh(t time.Time) bool {
 	return t.Add(1 * time.Minute).Before(time.Now())
 }
 
-func GetChannelConfigs(channel string) (map[string]string, util.Error) {
-	configs, e := GetConfigs()
+func (this *Config) GetChannelConfigs(channel string) (map[string]string, util.Error) {
+	configs, e := this.GetConfigs()
 	if e.Err != nil {
 		return nil, e
 	}
@@ -194,8 +260,8 @@ func GetChannelConfigs(channel string) (map[string]string, util.Error) {
 	}
 	return config, util.Error{}
 }
-func GetGroups() ([]string, util.Error) {
-	configs, e := GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
+func (this *Config) GetGroups() ([]string, util.Error) {
+	configs, e := this.GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
 	if e.Err != nil {
 		return []string{}, e
 	}
@@ -210,8 +276,8 @@ func GetGroups() ([]string, util.Error) {
 	return strings.Split(groups, SPILT_1), util.Error{}
 }
 
-func GetFdfsDomain() (string, util.Error) {
-	configs, e := GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
+func (this *Config) GetFdfsDomain() (string, util.Error) {
+	configs, e := this.GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
 	if e.Err != nil {
 		return "", e
 	}
@@ -222,8 +288,8 @@ func GetFdfsDomain() (string, util.Error) {
 	return domain, util.Error{}
 }
 
-func GetFdfsPort() (string, util.Error) {
-	configs, e := GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
+func (this *Config) GetFdfsPort() (string, util.Error) {
+	configs, e := this.GetChannelConfigs(CONFIG_DEFAULTCHANNEL)
 	if e.Err != nil {
 		return "", e
 	}
@@ -234,24 +300,24 @@ func GetFdfsPort() (string, util.Error) {
 	return port, util.Error{}
 }
 
-func GetNfsPath(channel string) ([]string, util.Error) {
-	value, e := getValue(channel, CONFIG_NFS)
+func (this *Config) GetNfsPath(channel string) ([]string, util.Error) {
+	value, e := this.getValue(channel, CONFIG_NFS)
 	if e.Err != nil {
 		return []string{}, e
 	}
 	return strings.Split(value, SPILT_1), util.Error{}
 }
 
-func GetNfsT1Path(channel string) ([]string, util.Error) {
-	value, e := getValue(channel, CONFIG_NFST1)
+func (this *Config) GetNfsT1Path(channel string) ([]string, util.Error) {
+	value, e := this.getValue(channel, CONFIG_NFST1)
 	if e.Err != nil {
 		return []string{}, e
 	}
 	return strings.Split(value, SPILT_1), util.Error{}
 }
 
-func getValue(channel, key string) (string, util.Error) {
-	configs, e := GetConfigs()
+func (this *Config) getValue(channel, key string) (string, util.Error) {
+	configs, e := this.GetConfigs()
 	if e.Err != nil {
 		return "", e
 	}
