@@ -6,7 +6,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	cat "github.com/ctripcorp/cat.go"
-	"github.com/ctripcorp/nephele/imgws/models"
+	//"github.com/ctripcorp/nephele/imgws/models"
 	_ "github.com/ctripcorp/nephele/imgws/routers"
 )
 
@@ -19,7 +19,7 @@ func ConfigCat() {
 func InitDB() {
 	orm.RegisterDriver("mysql", orm.DR_MySQL)
 	orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
-	orm.RegisterModel(new(models.Config))
+	//orm.RegisterModel(new(models.Config))
 }
 
 func main() {
