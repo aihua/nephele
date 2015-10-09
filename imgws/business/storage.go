@@ -2,14 +2,12 @@ package business
 
 import (
 	"errors"
-	"fmt"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/fdfs"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
 	"io/ioutil"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 

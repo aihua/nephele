@@ -6,8 +6,10 @@ import (
 )
 
 func init() {
-	ws := &controllers.ImageWS{}
-	beego.Handler("/imagews.asmx", ws)
+	imageWS := &controllers.ImageWS{}
+	beego.Handler("/imagews.asmx", imageWS)
+	logoWS := &controllers.LogoWS{}
+	beego.Handler("/logows.asmx", logoWS)
 	imageHandler := &controllers.ImageHandler{}
 	beego.Handler("/imagehandler.ashx", imageHandler)
 
