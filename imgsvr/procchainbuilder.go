@@ -203,38 +203,28 @@ func (this *ProcChainBuilder) getRotateProcessor(channel string, params map[stri
 	if !ok {
 		return nil, nil
 	}
-	degress, err := strconv.ParseFloat(rotate, 64)
-	if err != nil {
-		return nil, err
-	}
 
-	var (
-		process proc.ImageProcessor = nil
-		isnext  bool                = true
-	)
-	if channel == Hotel || channel == Globalhotel {
-		ft := hotelrotatefeature{degress}
-		process, isnext, err = ft.Process()
-	}
-	if err != nil {
-		return nil, err
-	}
-	if process != nil {
-		return process, nil
-	}
-	if !isnext {
-		return nil, nil
-	}
-
-	const key = "rotates"
 	rotateStr, err := data.GetRotates(channel)
 	if err != nil {
 		return nil, err
 	}
-	if !strings.Contains(rotateStr, JoinString(",", rotate, ",")) {
-		return nil, errors.New(JoinString("channel: ", channel, ", reason: not support rotate degree ", rotate))
-	}
 
+	var checkstr = JoinString(",", rotate, ",")
+	if !strings.Contains(rotateStr, checkstr) {
+		opacitiesStr, err := data.GetDissolves(Hotel)
+		if err != nil {
+			return nil, err
+		}
+		if strings.Contains(opacitiesStr, checkstr) {
+			return nil, nil
+		} else {
+			return nil, errors.New(JoinString("channel: ", channel, ", reason: not support rotate degree ", rotate))
+		}
+	}
+	degress, err := strconv.ParseFloat(rotate, 64)
+	if err != nil {
+		return nil, err
+	}
 	return &proc.RotateProcessor{degress, this.Cat}, nil
 }
 
@@ -351,21 +341,17 @@ func (this *ProcChainBuilder) getLogoWaterMarkProcessor(channel string, params m
 }
 
 func (this *ProcChainBuilder) getLogoDissolve(channel string, params map[string]string) int {
-	if channel == Hotel || channel == Globalhotel {
-		rotate, ok := params[":6"]
-		if !ok {
-			return 100
-		}
+	rotate, ok := params[":6"]
+	if ok {
 		dissolves, _ := data.GetDissolves(channel)
 		if !strings.Contains(dissolves, JoinString(",", rotate, ",")) {
-			return 100
+			return data.GetDissolve(channel)
 		}
 		dissolve, _ := strconv.Atoi(rotate)
 		return dissolve
 	} else {
 		return data.GetDissolve(channel)
 	}
-	return 100
 }
 
 func (this *ProcChainBuilder) getNameWaterMarkProcessor(sourceType string, channel string, path string, params map[string]string) (proc.ImageProcessor, error) {
