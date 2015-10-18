@@ -58,31 +58,3 @@ func NewImageAsPNG(width, height int, CAT cat.Cat) (*Image, error){
 	}
 	return i, nil
 }
-
-func (this *Image)AnnotateImage(text string) error {
-	var err error = nil
-	cstr := (*C.uchar)(unsafe.Pointer(&([]byte(text))[0]))
-	csize_t := C.size_t(len(text));
-	tran := this.Cat.NewTransaction("GraphicsMagickCmd", "Annotate")
-	defer func() {
-		tran.SetStatus(err)
-		tran.Complete()
-	}()
-
-	if this.magickWand == nil {
-		err = errors.New("error annotating image:magickwand is nil")
-		return err
-	}
-
-	status := C.annotateImage(this.magickWand, cstr, csize_t);
-	if status == 0 {
-		var etype int
-		descr := C.MagickGetException(this.magickWand, (*C.ExceptionType)(unsafe.Pointer(&etype)))
-		defer C.MagickRelinquishMemory(unsafe.Pointer(descr))
-		err = errors.New(fmt.Sprintf("error annotating image: %s (ExceptionType = %d)", C.GoString(descr), etype))
-		return err
-	}
-
-	return nil
-
-}
