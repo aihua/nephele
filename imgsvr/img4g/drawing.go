@@ -7,8 +7,10 @@ package img4g
 #include <wand/magick_wand.h>
 #include "cmagick.h"
 */
+import "C"
 import (
-	"C"
+	"fmt"
+	"unsafe"
 	"errors"
 	"image"
 	"image/png"
@@ -43,7 +45,11 @@ func NewImageAsPNG(width, height int, CAT cat.Cat) (*Image, error){
 	rgba := image.NewRGBA(image.Rect(0, 0, width, height))
 	for x := 0; x < width ; x++ {
 		for y := 0; y < height; y++ {
-			rgba.Set(x, y, color.RGBA{0, 0, 0, 0})
+			if x == y {
+				rgba.Set(x, y, color.RGBA{0, 0, 0, 255})
+			} else {
+				rgba.Set(x, y, color.RGBA{0, 0, 0, 0})
+			}
 		}
 	}
 	err := png.Encode(i, rgba)
@@ -51,4 +57,32 @@ func NewImageAsPNG(width, height int, CAT cat.Cat) (*Image, error){
 		return nil, err
 	}
 	return i, nil
+}
+
+func (this *Image)AnnotateImage(text string) error {
+	var err error = nil
+	cstr := (*C.uchar)(unsafe.Pointer(&([]byte(text))[0]))
+	csize_t := C.size_t(len(text));
+	tran := this.Cat.NewTransaction("GraphicsMagickCmd", "Annotate")
+	defer func() {
+		tran.SetStatus(err)
+		tran.Complete()
+	}()
+
+	if this.magickWand == nil {
+		err = errors.New("error annotating image:magickwand is nil")
+		return err
+	}
+
+	status := C.annotateImage(this.magickWand, cstr, csize_t);
+	if status == 0 {
+		var etype int
+		descr := C.MagickGetException(this.magickWand, (*C.ExceptionType)(unsafe.Pointer(&etype)))
+		defer C.MagickRelinquishMemory(unsafe.Pointer(descr))
+		err = errors.New(fmt.Sprintf("error annotating image: %s (ExceptionType = %d)", C.GoString(descr), etype))
+		return err
+	}
+
+	return nil
+
 }
