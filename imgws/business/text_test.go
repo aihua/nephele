@@ -2,6 +2,6 @@ package business
 
 import "testing"
 
-func main(t *testing.T) {
+func TestTextImage(t *testing.T) {
 	getTextImage("hello")
 }
