@@ -33,10 +33,10 @@ func (handler *LogoWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		header *response.Header
 		e util.Error
 		logoRequest = business.LogoRequest{
-			business.ImageRequest{
+			ImageRequest: business.ImageRequest{
 				Cat: Cat,
 			},
-			FontSizes: {14, ,16, 18, 20},
+			FontSizes: []int{14, 16, 18, 20},
 		}
 	)
 
