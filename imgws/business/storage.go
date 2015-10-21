@@ -16,6 +16,7 @@ type Storage interface {
 	Download() ([]byte, util.Error)
 	Delete(isDeleteAll bool) util.Error
 	ConvertFilePath(isSource bool) util.Error
+	UploadSlave(bts []byte, prefixName string, fileExtName string) (string, util.Error)
 }
 
 var (
@@ -92,6 +93,33 @@ func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error)
 		result = util.Error{IsNormal: true, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
 		return "", result
 	}
+	return path, result
+}
+
+func (this *FdfsStorage) UploadSlave(bts []byte, prefixName string, fileExtName string) (string, util.Error) {
+	if e := this.initFdfsClient(); e.Err != nil {
+		return "", e
+	}
+
+	var result util.Error = util.Error{}
+	if this.Cat != nil {
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Upload")
+		defer func() {
+			if result.Err != nil && result.IsNormal {
+				tran.SetStatus(result.Err)
+			} else {
+				tran.SetStatus("0")
+			}
+			tran.Complete()
+		}()
+	}
+
+	path, err := fdfsClient.UploadSlaveByBuffer(bts, this.Path, prefixName, fileExtName)
+	if err != nil {
+		result = util.Error{IsNormal: true, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
+		return "", result
+	}
+
 	return path, result
 }
 
@@ -196,6 +224,10 @@ type NfsStorage struct {
 }
 
 func (this *NfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
+	return "", util.Error{}
+}
+	
+func (this *NfsStorage) UploadSlave(bts []byte, prefixName string, fileExtName string) (string, util.Error) {
 	return "", util.Error{}
 }
 
