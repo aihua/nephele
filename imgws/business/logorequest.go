@@ -26,7 +26,7 @@ func (this LogoRequest) Save(r *request.SaveRequest) (response.SaveResponse, uti
 
 	for _, size := range this.FontSizes {
 		bts := getTextImage(li.Name, size)
-		storage.UploadSlave(bts, fmt.Sprintf("_logo_%d", size), "PNG")
+		storage.UploadSlave(bts, fmt.Sprintf("_logo_%d", size), "png")
 	}
 	return response.SaveResponse{}, util.Error{}
 }
