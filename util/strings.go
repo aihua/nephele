@@ -5,6 +5,8 @@ import (
 	"bytes"
 	cat "github.com/ctripcorp/cat.go"
 	"net"
+	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +55,17 @@ func GetIP() string {
 		}
 	}
 	return ""
+}
+
+func GetClientIP(req *http.Request) string {
+	addr := req.Header.Get("X-Real-IP")
+	if addr == "" {
+		addr = req.Header.Get("X-Forwarded-For")
+		if addr == "" {
+			addr = req.RemoteAddr
+		}
+	}
+	return addr
 }
 
 func Substr(str string, start, length int) string {
@@ -124,4 +137,72 @@ func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
 	}
 	event.SetStatus("0")
 	event.Complete()
+}
+
+// Alloc        uint64      bytes allocated and still in use // 已分配且仍在使用的字节数
+// 	TotalAlloc   uint64      // bytes allocated (even if freed) // 已分配（包括已释放的）字节数
+// 	Sys          uint64      // bytes obtained from system (sum of XxxSys below) // 从系统中获取的字节数（应当为下面 XxxSys 之和）
+// 	Mallocs      uint64      // number of mallocs // malloc 数
+// 	Frees        uint64      // number of frees // free 数
+// 	HeapAlloc    uint64      // bytes allocated and still in use // 已分配且仍在使用的字节数
+// 	HeapSys      uint64      // bytes obtained from system // 从系统中获取的字节数
+// 	HeapIdle     uint64      // bytes in idle spans // 空闲区间的字节数
+// 	HeapInuse    uint64      // bytes in non-idle span // 非空闲区间的字节数
+// 	HeapReleased uint64      // bytes released to the OS // 释放给OS的字节数
+// 	HeapObjects  uint64      // total number of allocated objects// 已分配对象的总数
+// 	OtherSys     uint64      // other system allocations // 其它系统分配
+// 	NextGC       uint64      // next run in HeapAlloc time (bytes) // 下次运行的 HeapAlloc 时间（字节）
+// 	LastGC       uint64      // last run in absolute time (ns) // 上次运行的绝对时间（纳秒 ns）
+// 	PauseNs      [256]uint64 // circular buffer of recent GC pause times, most recent at [(NumGC+255)%256]
+// 	NumGC        uint32
+
+func GetStatus() map[string]string {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	var second uint64 = 1000000000
+	var memory uint64 = 1024 * 1024
+	return map[string]string{"Alloc": strconv.FormatUint(mem.Alloc/memory, 10),
+		"TotalAlloc":   strconv.FormatUint(mem.TotalAlloc/memory, 10),
+		"Sys":          strconv.FormatUint(mem.Sys/memory, 10),
+		"Mallocs":      strconv.FormatUint(mem.Mallocs, 10),
+		"Frees":        strconv.FormatUint(mem.Frees, 10),
+		"HeapAlloc":    strconv.FormatUint(mem.HeapAlloc/memory, 10),
+		"HeapSys":      strconv.FormatUint(mem.HeapSys/memory, 10),
+		"HeapIdle":     strconv.FormatUint(mem.HeapIdle/memory, 10),
+		"HeapInuse":    strconv.FormatUint(mem.HeapInuse/memory, 10),
+		"HeapReleased": strconv.FormatUint(mem.HeapReleased/memory, 10),
+		"HeapObjects":  strconv.FormatUint(mem.HeapObjects, 10),
+		"OtherSys":     strconv.FormatUint(mem.OtherSys, 10),
+		"NextGC":       strconv.FormatUint(mem.NextGC/second, 10),
+		"LastGC":       strconv.FormatUint(mem.LastGC/second, 10),
+		"PauseNs":      strconv.FormatUint(mem.PauseNs[(mem.NumGC+255)%256]/second, 10),
+		"NumGC":        strconv.Itoa(int(mem.NumGC)),
+	}
+}
+
+func GetImageSizeDistribution(size int) string {
+	switch {
+	case size < 0:
+		return "<0"
+	case size == 0:
+		return "0"
+	case size > 0 && size <= 512*1024:
+		return "1~512KB"
+	case size > 512*1024 && size <= 1024*1024:
+		return "512~1024KB"
+	case size > 1024*1024 && size <= 2*1024*1024:
+		return "1~2M"
+	case size > 2*1024*1024 && size <= 4*1024*1024:
+		return "2~4M"
+	case size > 4*1024*1024 && size <= 6*1024*1024:
+		return "4~6M"
+	case size > 6*1024*1024 && size <= 10*1024*1024:
+		return "6~10M"
+	case size > 10*1024*1024 && size <= 20*1024*1024:
+		return "10~20M"
+	case size > 20*1024*1024 && size <= 30*1024*1024:
+		return "20~30M"
+	default:
+		return ">30M"
+	}
 }

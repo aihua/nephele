@@ -30,7 +30,7 @@ func (this *ChannelController) Add() {
 // @router /channel/get/ [get]
 func (this *ChannelController) Get() {
 	ch := models.Channel{}
-	channels, err := ch.GetChannels()
+	channels, err := ch.GetAll()
 	if err.Err != nil {
 		this.Ctx.WriteString((err.Err.(error)).Error())
 	} else {

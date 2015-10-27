@@ -1,7 +1,7 @@
 package util
 
 import "os"
-import cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+import cat "github.com/ctripcorp/cat.go"
 
 //get running environment from environment variable 'NEPHELE_ENV'
 //only support env 'uat' and 'prod'
@@ -25,4 +25,3 @@ func InitCat() {
 	}
 	cat.DOMAIN = "nephele"
 }
-

@@ -11,6 +11,7 @@ import (
 	"github.com/ctripcorp/nephele/util/soapparse/response"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 type ImageWS struct{}
@@ -22,6 +23,7 @@ var (
 	REQUESTTYPE_DELETEIMAGE = "Arch.Base.ImageWS.DeleteImage"
 	REQUESTTYPE_LOADZIP     = "Arch.Base.ImageWS.LoadZip"
 	REQUESTTYPE_LOADIMAGE   = "Arch.Base.ImageWS.LoadImage"
+	CATTRANSUCCESS          = "0"
 )
 
 func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +32,14 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/xml")
 
 	Cat := cat.Instance()
-	tran := Cat.NewTransaction("ImageWS.URL", "ImageWs")
+	tran := Cat.NewTransaction("URL", "ImageWs.asmx")
+	util.LogEvent(Cat, "URL", "URL.Client", map[string]string{
+		"clientip": util.GetClientIP(r),
+		"serverip": util.GetIP(),
+		"proto":    r.Proto,
+		"referer":  r.Referer(),
+		//"agent":    request.UserAgent(),
+	})
 	var result util.Error
 	defer func() {
 		if p := recover(); p != nil {
@@ -38,6 +47,7 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if result.Err != nil && !result.IsNormal {
 			tran.SetStatus(result.Err)
+
 		} else {
 			tran.SetStatus("0")
 		}
@@ -45,20 +55,16 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	bts, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		result = util.Error{IsNormal: false, Err: err, Type: "RequestReadError"}
 		util.LogErrorEvent(Cat, "RequestReadError", err.Error())
-
+		result = util.Error{IsNormal: false, Err: err, Type: "RequestReadError"}
 		msg := []byte(err.Error())
 		writeResponse(w, msg)
 		return
 	}
 	req := request.Request{}
-	if err := soapparse.EncReq(bts, &req); err != nil {
-		util.LogErrorEvent(Cat, "SoapParseRequestError", err.Error())
-		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseRequestError"}
-		content := []byte("SoapParseRequestError")
-		writeResponse(w, content)
-
+	result = EncodeRequest(Cat, bts, &req)
+	if result.Err != nil && !result.IsNormal {
+		writeResponse(w, []byte(result.Type))
 		return
 	}
 	var (
@@ -68,7 +74,7 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		imgRequest = business.ImageRequest{Cat: Cat}
 	)
 
-	requestTran := Cat.NewTransaction("ImageWS.Request", req.Header.RequestType)
+	requestTran := Cat.NewTransaction("Request", strings.Replace(req.Header.RequestType, "Arch.Base.ImageWS.", "", -1))
 	defer func() {
 		if p := recover(); p != nil {
 			Cat.LogPanic(p)
@@ -76,7 +82,7 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if result.Err != nil && !result.IsNormal {
 			requestTran.SetStatus(result.Err)
 		} else {
-			requestTran.SetStatus("0")
+			requestTran.SetStatus(CATTRANSUCCESS)
 		}
 		requestTran.Complete()
 	}()
@@ -95,25 +101,54 @@ func (handler *ImageWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e = util.Error{IsNormal: true, Err: errors.New("requesttype is invalid!"), Type: "RequestTypeInvalid"}
 	}
 	if e.Err != nil {
-		fmt.Println(e.Err)
 		result = e
 		header = createFailHeader(req.Header, fmt.Sprintf("%v", e.Err))
 	} else {
 		header = transformHeader(req.Header, RESULTCODE_SUCCESS, "")
 	}
+	content, e := DecodeResponse(Cat, header, resp)
+	if e.Err != nil {
+		result = e
+		writeResponse(w, []byte(result.Err.(error).Error()))
+	} else {
+		writeResponse(w, content)
+	}
+}
 
+func DecodeResponse(Cat cat.Cat, header *response.Header, resp interface{}) ([]byte, util.Error) {
+	soapTran := Cat.NewTransaction("SOAP", "DecodeResponse")
+	result := util.Error{}
+	defer func() {
+		if result.Err != nil && !result.IsNormal {
+			soapTran.SetStatus(result.Err)
+		} else {
+			soapTran.SetStatus(CATTRANSUCCESS)
+		}
+		soapTran.Complete()
+	}()
 	content, err := soapparse.DecResp(header, resp) //
 	if err != nil {
-		fmt.Println(err)
 		util.LogErrorEvent(Cat, "SoapParseResponseError", err.Error())
 		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseResponseError"}
-		msg := []byte(err.Error())
-		writeResponse(w, msg)
-		return
 	}
-
-	//fmt.Println(string(content))
-	writeResponse(w, content)
+	return content, result
+}
+func EncodeRequest(Cat cat.Cat, bts []byte, req *request.Request) util.Error {
+	soapTran := Cat.NewTransaction("SOAP", "EncodeRequest")
+	result := util.Error{}
+	defer func() {
+		if result.Err != nil && !result.IsNormal {
+			soapTran.SetStatus(result.Err)
+		} else {
+			soapTran.SetStatus(CATTRANSUCCESS)
+		}
+		soapTran.Complete()
+	}()
+	if err := soapparse.EncReq(bts, req); err != nil {
+		util.LogErrorEvent(Cat, "SoapParseRequestError", err.Error())
+		result = util.Error{IsNormal: false, Err: err, Type: "SoapParseRequestError"}
+	}
+	return result
 }
 
 func writeResponse(w http.ResponseWriter, msg []byte) {

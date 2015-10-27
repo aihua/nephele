@@ -2,8 +2,9 @@ package imgsvr
 
 import (
 	"fmt"
-	log "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/ctripcorp/nephele/imgsvr/data"
+	"github.com/ctripcorp/nephele/util"
 	"net/http"
 	"net/url"
 	"os"
@@ -93,7 +94,7 @@ func (this *SubProcessor) sendStatus() {
 			"port": this.Port,
 			"uri":  uri,
 		}).Debug("begin send status")
-		status := GetStatus()
+		status := util.GetStatus()
 		data := url.Values{}
 		data.Add("port", this.Port)
 		for k, v := range status {

@@ -1,28 +1,27 @@
 package models
 
 import (
-	"github.com/astaxie/beego/orm"
-	_ "github.com/go-sql-driver/mysql"
+	//"database/sql"
+	//"github.com/astaxie/beego/orm"
 	"testing"
 )
 
-var isinit bool = false
-
-func InitDB() {
-	if !isinit {
-		orm.RegisterDriver("mysql", orm.DR_MySQL)
-		orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
-		orm.RegisterModel(new(Config))
-		isinit = true
-	}
-}
-
 func TestWhitelistAddSize(t *testing.T) {
-	InitDB()
+	InitDBForTest()
 	var conf Config = Config{
-		Channel: "tg",
-		Key:     "sizes",
+		ChannelCode: "10",
+		Key:         "sizes",
 	}
 	conf.AddSize("320X160")
 	conf.AddSize("200X200")
+}
+
+func TestGetConfigs(t *testing.T) {
+	config := Config{}
+	configs, _ := config.GetConfigs()
+
+	_, exists := configs["10"]
+	if !exists {
+		t.Error("error")
+	}
 }

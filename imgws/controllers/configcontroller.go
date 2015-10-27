@@ -16,7 +16,7 @@ func (this *ConfigController) Add() {
 	channel := this.GetString("channel")
 	key := this.GetString("key")
 	value := this.GetString("value")
-	config := models.Config{Channel: channel, Key: key, Value: value}
+	config := models.Config{ChannelCode: channel, Key: key, Value: value}
 	err := config.Insert()
 	if err != nil {
 		this.Ctx.WriteString(err.Error())
@@ -71,7 +71,7 @@ func (this *ConfigController) Update() {
 		this.Ctx.WriteString("params is invalid")
 		return
 	}
-	config := models.Config{Channel: channel, Key: key, Value: value}
+	config := models.Config{ChannelCode: channel, Key: key, Value: value}
 	err := config.UpdateValue()
 	if err != nil {
 		this.Ctx.WriteString(err.Error())

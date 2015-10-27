@@ -5,7 +5,3 @@ type Error struct {
 	Type     string
 	IsNormal bool
 }
-
-func (err *Error) Error() string {
-	return err.Type + ": " + (err.Err.(error)).Error()
-}

@@ -9,14 +9,12 @@ package img4g
 */
 import "C"
 import (
-	"fmt"
-	"unsafe"
 	"errors"
 	"image"
 	"image/png"
 	"image/color"
 
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	cat "github.com/ctripcorp/cat.go"
 )
 
 var (

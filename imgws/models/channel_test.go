@@ -7,9 +7,23 @@ import (
 	"time"
 )
 
+var isinit bool = false
+
+func InitDBForTest() {
+	if !isinit {
+		orm.RegisterDriver("mysql", orm.DR_MySQL)
+		orm.RegisterDataBase("default", "mysql", "root:@/imagedb?charset=utf8")
+		//orm.Debug = true
+		//orm.RegisterModel(new(models.Config))
+		isinit = true
+	}
+}
+
+var channel Channel = Channel{}
+
 func TestGetChannels(t *testing.T) {
 	InitDBForTest()
-	m, e := GetChannels()
+	m, e := channel.GetChannels()
 	if e.Err != nil {
 		t.Error(e.Err)
 	}
@@ -18,7 +32,7 @@ func TestGetChannels(t *testing.T) {
 	//insert
 	o := orm.NewOrm()
 	o.Raw("INSERT INTO channel(name,code) VALUES(?,?)", "test", "ZZ").Exec()
-	m1, e := GetChannels()
+	m1, e := channel.GetChannels()
 	m1count := len(m1)
 	if mcount != m1count {
 		t.Error("refresh error")
@@ -26,7 +40,7 @@ func TestGetChannels(t *testing.T) {
 
 	//refresh time  get
 	getChannelsTime = time.Now().Add(-2 * time.Minute)
-	m2, e := GetChannels()
+	m2, e := channel.GetChannels()
 	m2count := len(m2)
 	if m2count == mcount {
 		t.Error("refresh fail")

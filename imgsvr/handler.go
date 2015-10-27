@@ -3,8 +3,8 @@ package imgsvr
 import (
 	"errors"
 	"fmt"
-	log "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	log "github.com/Sirupsen/logrus"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgsvr/img4g"
 	"github.com/ctripcorp/nephele/imgsvr/proc"
 	"github.com/ctripcorp/nephele/imgsvr/storage"
@@ -56,8 +56,8 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	}()
 
 	LogEvent(Cat, "URL", "URL.Client", map[string]string{
-		"clientip": GetClientIP(request),
-		"serverip": GetIP(),
+		"clientip": util.GetClientIP(request),
+		"serverip": util.GetIP(),
 		"proto":    request.Proto,
 		"referer":  request.Referer(),
 		//"agent":    request.UserAgent(),

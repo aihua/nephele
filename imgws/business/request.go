@@ -13,16 +13,19 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math/rand"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
-	ERRORTYPE_MARSHALJSON           = "MarshalJsonErr"
-	ERRORTYPE_STORAGETYPENOSUPPORTE = "StorageTypeNoSupporte"
-	SVG                             = 6063
-	NEWIMAGENAMELENGTH              = 21
+	ERRORTYPE_MARSHALJSON               = "MarshalJsonErr"
+	ERRORTYPE_STORAGETYPENOSUPPORTE     = "StorageTypeNoSupporte"
+	SVG                                 = 6063
+	NEWIMAGENAMELENGTH                  = 21
+	TableCount                      int = 6 // 64
 )
 
 type ImageRequest struct {
@@ -32,7 +35,7 @@ type ImageRequest struct {
 func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, util.Error) {
 	r.TargetFormat = strings.ToLower(r.TargetFormat)
 	r.Channel = strings.ToLower(r.Channel)
-	util.LogEvent(this.Cat, "ImageWs.SaveRequest", r.Channel, nil)
+	util.LogEvent(this.Cat, "Save", r.Channel, nil)
 
 	this.checkPlanID(r)
 	if err := this.checkSaveRequest(r); err.Err != nil {
@@ -48,11 +51,12 @@ func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, ut
 	}
 	tableZone := sharding()
 	channel := models.Channel{Cat: this.Cat}
-	imgIndex := models.ImageIndex{Channel: channel.GetChannelCode(r.Channel), StoragePath: path, StorageType: storageType, TableZone: tableZone, Cat: this.Cat}
+	imgIndex := models.ImageIndex{ChannelCode: channel.GetChannelCode(r.Channel), StoragePath: path, StorageType: storageType, TableZone: tableZone, Cat: this.Cat}
 	plan := ""
 	if r.Process.AnyTypes != nil && len(r.Process.AnyTypes) > 0 {
 		bts, err := r.Process.MarshalJSON()
 		if err != nil {
+			util.LogErrorEvent(this.Cat, ERRORTYPE_MARSHALJSON, err.Error())
 			return response.SaveResponse{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_MARSHALJSON}
 		}
 		plan = string(bts)
@@ -65,15 +69,14 @@ func (this ImageRequest) Save(r *request.SaveRequest) (response.SaveResponse, ut
 	return response.SaveResponse{CheckPass: true, OriginalPath: uri, TargetPath: uri}, util.Error{}
 }
 
-var shardingCount int = 0
+var shardingCount int = rand.New(rand.NewSource(time.Now().UnixNano())).Intn(TableCount)
 
 func sharding() int {
 	if shardingCount == 99999999 {
 		shardingCount = 0
 	}
 	shardingCount = shardingCount + 1
-	tablecount := 64
-	return shardingCount%tablecount + 1
+	return shardingCount%TableCount + 1
 }
 
 var jpg string = "jpg"
@@ -92,55 +95,63 @@ func (this ImageRequest) checkPlanID(r *request.SaveRequest) {
 	}
 }
 func (this ImageRequest) checkSaveRequest(r *request.SaveRequest) util.Error {
-	t := "Save.ParamInvalid"
+	t := "ParamInvalid"
 	if r.Channel == "" {
+		util.LogEvent(this.Cat, t, "ChannelEmpty", nil)
 		return util.Error{IsNormal: true, Err: errors.New("Channel can't be empty"), Type: t}
 	}
 	if r.FileBytes == nil || len(r.FileBytes) < 1 {
-		return util.Error{IsNormal: true, Err: errors.New("FIleBytes can't be empty"), Type: t}
+		util.LogEvent(this.Cat, t, util.JoinString(r.Channel, "-FileBytesEmpty"), nil)
+		return util.Error{IsNormal: true, Err: errors.New("FileBytes can't be empty"), Type: t}
 	}
 	channel := models.Channel{Cat: this.Cat}
-	m, err := channel.GetChannels()
+	channels, err := channel.GetAll()
 	if err.Err != nil {
 		return err
 	}
-	_, exists := m[r.Channel]
+	_, exists := channels[r.Channel]
 	if !exists {
-		return util.Error{IsNormal: true, Err: errors.New(util.JoinString("channel[", r.Channel, "] is invalid!")), Type: t}
+		util.LogEvent(this.Cat, t, util.JoinString(r.Channel, "-NoRegister"), nil)
+		return util.Error{IsNormal: true, Err: errors.New(util.JoinString("channel[", r.Channel, "] isn't register!")), Type: t}
 	}
 	return util.Error{}
 }
 
 func (this ImageRequest) checkSaveCheckItem(r *request.SaveRequest) util.Error {
-	t := "Save.CheckFaile"
+	t := "CheckFail"
 	//if r.CheckItem == nil {
 	//	return util.Error{}
 	//}
 	if r.CheckItem.IsOtherImage {
 		if !isSvg(r.FileBytes) {
-			return util.Error{IsNormal: false, Err: errors.New("image format is't invalid!"), Type: t}
+			util.LogEvent(this.Cat, t, "FormatInvalid", map[string]string{"detail": "image isn't svg!"})
+			return util.Error{IsNormal: true, Err: errors.New("image isn't svg!"), Type: t}
 		}
 	} else {
 		img, _, err := image.Decode(bytes.NewReader(r.FileBytes))
 		if err != nil {
-			return util.Error{IsNormal: false, Err: err, Type: t}
+			util.LogEvent(this.Cat, t, "FormatInvalid", map[string]string{"detail": err.Error()})
+			return util.Error{IsNormal: true, Err: err, Type: t}
 		}
 		//todo check img format
 		if r.CheckItem.MinWidth > 0 && r.CheckItem.MinWidth > img.Bounds().Dx() {
-			return util.Error{IsNormal: false, Err: errors.New("image width is less minwidth!"), Type: t}
+			util.LogEvent(this.Cat, t, "LessMinWidth", map[string]string{"detail": util.JoinString("MinWidth:"+strconv.Itoa(r.CheckItem.MinWidth), " ImageWidth:", strconv.Itoa(img.Bounds().Dx()))})
+			return util.Error{IsNormal: true, Err: errors.New("image width is less minwidth!"), Type: t}
 		}
 		if r.CheckItem.MinHeight > 0 && r.CheckItem.MinHeight > img.Bounds().Dy() {
-			return util.Error{IsNormal: false, Err: errors.New("image heigth is less minheight!"), Type: t}
+			util.LogEvent(this.Cat, t, "LessMinHeight", map[string]string{"detail": util.JoinString("MinHeight:"+strconv.Itoa(r.CheckItem.MinHeight), " ImageHeight:", strconv.Itoa(img.Bounds().Dy()))})
+			return util.Error{IsNormal: true, Err: errors.New("image heigth is less minheight!"), Type: t}
 		}
 	}
 	if r.CheckItem.MaxBytes > 0 && int(r.CheckItem.MaxBytes) < len(r.FileBytes) {
-		return util.Error{IsNormal: false, Err: errors.New("image size beyond max size"), Type: t}
+		util.LogEvent(this.Cat, t, "BeyondMaxSize", map[string]string{"detail": util.JoinString("MaxSize:"+strconv.Itoa(int(r.CheckItem.MaxBytes)), " ImageSize:", strconv.Itoa(len(r.FileBytes)))})
+		return util.Error{IsNormal: true, Err: errors.New("image size beyond max size"), Type: t}
 	}
 	return util.Error{Err: nil, IsNormal: true}
 }
 
 func isSvg(bts []byte) bool {
-	i, _ := strconv.Atoi(string(bts[0]) + string(bts[1]))
+	i, _ := strconv.Atoi(strconv.Itoa(int(bts[0])) + strconv.Itoa(int(bts[1])))
 	return i == SVG
 }
 
@@ -150,7 +161,7 @@ func (this ImageRequest) Download(r *request.LoadImgRequest) (response.LoadImgRe
 		return response.LoadImgResponse{}, e
 	}
 
-	util.LogEvent(this.Cat, "ImageWs.DownloadRequest", this.GetChannel(r.FilePath), map[string]string{"uri": r.FilePath})
+	util.LogEvent(this.Cat, "Download", this.GetChannel(r.FilePath), map[string]string{"uri": r.FilePath})
 
 	bts, e := storage.Download()
 	if e.Err != nil {
@@ -161,22 +172,11 @@ func (this ImageRequest) Download(r *request.LoadImgRequest) (response.LoadImgRe
 }
 
 func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZipResponse, util.Error) {
+	t := "ParamInvalid"
 	if len(r.Files.LoadFiles) < 1 {
+		util.LogEvent(this.Cat, t, "NoLoadFiles", nil)
 		return response.LoadZipResponse{}, util.Error{IsNormal: true, Err: errors.New("No files in request"), Type: "NoFilesInRequest"}
 	}
-	var result util.Error
-	if this.Cat != nil {
-		tran := this.Cat.NewTransaction("ImageWs.DownloadZipRequest", strconv.Itoa(len(r.Files.LoadFiles)))
-		defer func() {
-			if result.Err != nil && !result.IsNormal {
-				tran.SetStatus(result.Err)
-			} else {
-				tran.SetStatus("0")
-			}
-			tran.Complete()
-		}()
-	}
-
 	files := make(map[string][]byte)
 	for _, file := range r.Files.LoadFiles {
 		name := path.Base(strings.Replace(file.FilePath, "\\", "/", -1))
@@ -185,20 +185,17 @@ func (this ImageRequest) DownloadZip(r *request.LoadZipRequest) (response.LoadZi
 		}
 		storage, e := this.getStorageBySource(file.FilePath, file.IsSource)
 		if e.Err != nil {
-			result = e
 			return response.LoadZipResponse{}, e
 		}
-		util.LogEvent(this.Cat, "ImageWs.DownloadZipRequest", this.GetChannel(file.FilePath), map[string]string{"uri": file.FilePath})
+		util.LogEvent(this.Cat, "DownloadZip", this.GetChannel(file.FilePath), map[string]string{"uri": file.FilePath})
 		bts, e := storage.Download()
 		if e.Err != nil {
-			result = e
 			return response.LoadZipResponse{}, e
 		}
 		files[name] = bts
 	}
 	bts, e := util.Zip(files)
 	if e.Err != nil {
-		result = e
 		return response.LoadZipResponse{}, e
 	}
 	bts = []byte(soapparse.B64.EncodeToString(bts))
@@ -210,16 +207,10 @@ func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteRespon
 	if e.Err != nil {
 		return response.DeleteResponse{}, e
 	}
-	channel := models.Channel{Cat: this.Cat}
-	util.LogEvent(this.Cat, "ImageWs.DeleteRequest", channel.GetChannelCode(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
-
-	e = storage.Delete(r.IsDeleteAll)
-	if e.Err != nil {
-		return response.DeleteResponse{}, e
-	}
+	util.LogEvent(this.Cat, "Delete", this.GetChannel(r.FilePath), map[string]string{"uri": r.FilePath, "IsDeleteAll": strconv.FormatBool(r.IsDeleteAll)})
 
 	if isNewUri(r.FilePath) {
-		imgIndex := models.ImageIndex{}
+		imgIndex := models.ImageIndex{Cat: this.Cat}
 		e = imgIndex.ParseName(r.FilePath)
 		if e.Err != nil {
 			return response.DeleteResponse{}, e
@@ -228,6 +219,10 @@ func (this ImageRequest) Delete(r *request.DeleteRequest) (response.DeleteRespon
 		if e.Err != nil {
 			return response.DeleteResponse{}, e
 		}
+	}
+	e = storage.Delete(r.IsDeleteAll)
+	if e.Err != nil {
+		return response.DeleteResponse{}, e
 	}
 	return response.DeleteResponse{}, util.Error{}
 }
@@ -241,7 +236,7 @@ func (this ImageRequest) getStorageBySource(path string, isSource bool) (Storage
 	var storage Storage
 	if isNewUri(path) {
 		imagename := util.Substr(path, 1, NEWIMAGENAMELENGTH)
-		imgIndex := models.ImageIndex{}
+		imgIndex := models.ImageIndex{Cat: this.Cat}
 		if e := imgIndex.Parse(imagename); e.Err != nil {
 			return nil, e
 		}
@@ -250,6 +245,7 @@ func (this ImageRequest) getStorageBySource(path string, isSource bool) (Storage
 		storageType = imgIndex.StorageType
 		storage = CreateStorage(storagePath, storageType, this.Cat)
 		if storage == nil {
+			util.LogErrorEvent(this.Cat, ERRORTYPE_STORAGETYPENOSUPPORTE, util.JoinString("Can't supporte storagetype[", storageType, "]"))
 			return nil, util.Error{IsNormal: false, Err: errors.New(util.JoinString("Can't supporte storagetype[", storageType, "]")), Type: ERRORTYPE_STORAGETYPENOSUPPORTE}
 		}
 	} else {
@@ -274,7 +270,7 @@ func (this ImageRequest) GetChannel(path string) string {
 	if isNewUri(path) {
 		channelCode := util.Substr(path, 1, 2)
 		channel := models.Channel{Cat: this.Cat}
-		channels, _ := channel.GetChannels()
+		channels, _ := channel.GetAll()
 		for k, v := range channels {
 			if v == channelCode {
 				return k
