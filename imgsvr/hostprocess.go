@@ -2,8 +2,9 @@ package imgsvr
 
 import (
 	"fmt"
-	log "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	log "github.com/Sirupsen/logrus"
+	cat "github.com/ctripcorp/cat.go"
+	"github.com/ctripcorp/nephele/util"
 	"net/http"
 	"net/url"
 	"os"
@@ -225,7 +226,7 @@ func (this *HostProcessor) sendCatHeartBeat() {
 	catinstance := cat.Instance()
 	for {
 		log.Debug("send cat heartbeat")
-		stats1 := GetStatus()
+		stats1 := util.GetStatus()
 		data := url.Values{}
 		data.Add("port", hostPort)
 		for k, v := range stats1 {

@@ -1,7 +1,7 @@
 package data
 
 import (
-	"github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Unknwon/goconfig"
+	"github.com/Unknwon/goconfig"
 	"github.com/ctripcorp/nephele/util"
 	"strconv"
 	"strings"

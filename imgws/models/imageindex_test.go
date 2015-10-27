@@ -12,11 +12,11 @@ func TestParseName(t *testing.T) {
 	if e.Err != nil {
 		t.Error(e.Err)
 	}
-	if imgIndex.Idx != 11 {
-		t.Error("idx is invalid!" + strconv.Itoa(int(imgIndex.Idx)))
+	if imgIndex.Id != 11 {
+		t.Error("idx is invalid!" + strconv.Itoa(int(imgIndex.Id)))
 	}
-	if imgIndex.Channel != "10" {
-		t.Error("channel is invalid!" + imgIndex.Channel)
+	if imgIndex.ChannelCode != "10" {
+		t.Error("channel is invalid!" + imgIndex.ChannelCode)
 	}
 	if imgIndex.TableZone != 2 {
 		t.Error("tablezone is invalid!" + strconv.Itoa(imgIndex.TableZone))

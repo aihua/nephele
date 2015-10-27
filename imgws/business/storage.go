@@ -1,13 +1,13 @@
 package business
 
 import (
-	"errors"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/fdfs"
 	"github.com/ctripcorp/nephele/imgws/models"
 	"github.com/ctripcorp/nephele/util"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -57,7 +57,7 @@ var (
 	uploadcount int = 0
 	count           = 0
 	lock            = make(chan int, 1)
-	CATTITLE        = "ImageWS.Storage"
+	CATTITLE        = "Storage"
 )
 
 func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
@@ -79,6 +79,8 @@ func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error)
 	var result util.Error = util.Error{}
 	if this.Cat != nil {
 		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Upload")
+		util.LogEvent(this.Cat, "Size", util.GetImageSizeDistribution(len(bts)), map[string]string{"size": strconv.Itoa(len(bts))})
+
 		defer func() {
 			if result.Err != nil && result.IsNormal {
 				tran.SetStatus(result.Err)
@@ -90,7 +92,8 @@ func (this *FdfsStorage) Upload(bts []byte, fileExt string) (string, util.Error)
 	}
 	path, err := fdfsClient.UploadByBuffer(g, bts, fileExt)
 	if err != nil {
-		result = util.Error{IsNormal: true, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
+		util.LogErrorEvent(this.Cat, ERRORTYPE_FDFSUPLOADERR, err.Error())
+		result = util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSUPLOADERR}
 		return "", result
 	}
 	return path, result
@@ -103,7 +106,7 @@ func (this *FdfsStorage) UploadSlave(bts []byte, prefixName string, fileExtName 
 
 	var result util.Error = util.Error{}
 	if this.Cat != nil {
-		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Upload")
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.UploadSlave")
 		defer func() {
 			if result.Err != nil && result.IsNormal {
 				tran.SetStatus(result.Err)
@@ -122,7 +125,6 @@ func (this *FdfsStorage) UploadSlave(bts []byte, prefixName string, fileExtName 
 
 	return path, result
 }
-
 func (this *FdfsStorage) Download() ([]byte, util.Error) {
 	if e := this.initFdfsClient(); e.Err != nil {
 		return nil, e
@@ -132,13 +134,15 @@ func (this *FdfsStorage) Download() ([]byte, util.Error) {
 		err    error
 		result = util.Error{}
 	)
-
+	var messagesize int
 	if this.Cat != nil {
 		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Download")
+		tran.AddData("path", this.Path)
 		defer func() {
 			if result.Err != nil && result.IsNormal {
 				tran.SetStatus(result.Err)
 			} else {
+				util.LogEvent(this.Cat, "Size", util.GetImageSizeDistribution(messagesize), map[string]string{"size": strconv.Itoa(messagesize)})
 				tran.SetStatus("0")
 			}
 			tran.Complete()
@@ -146,9 +150,11 @@ func (this *FdfsStorage) Download() ([]byte, util.Error) {
 	}
 	bts, err = fdfsClient.DownloadToBuffer(this.Path, this.Cat)
 	if err != nil {
+		util.LogErrorEvent(this.Cat, ERRORTYPE_FDFSDOWNLOADERR, err.Error())
 		result = util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDOWNLOADERR}
 		return []byte{}, result
 	}
+	messagesize = len(bts)
 	return bts, result
 }
 
@@ -162,7 +168,8 @@ func (this *FdfsStorage) Delete(isDeleteAll bool) util.Error {
 		result = util.Error{}
 	)
 	if this.Cat != nil {
-		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Download")
+		tran := this.Cat.NewTransaction(CATTITLE, "Fdfs.Delete")
+		tran.AddData("path", this.Path)
 		defer func() {
 			if result.Err != nil && result.IsNormal {
 				tran.SetStatus(result.Err)
@@ -174,6 +181,7 @@ func (this *FdfsStorage) Delete(isDeleteAll bool) util.Error {
 	}
 	err = fdfsClient.DeleteFile(this.Path)
 	if err != nil {
+		util.LogErrorEvent(this.Cat, ERRORTYPE_FDFSDELETEERR, err.Error())
 		result = util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSDELETEERR}
 		return result
 	}
@@ -212,6 +220,7 @@ func (this *FdfsStorage) initFdfsClient() util.Error {
 		var err error
 		fdfsClient, err = fdfs.NewFdfsClient([]string{fdfsdomain}, fdfsport)
 		if err != nil {
+			util.LogErrorEvent(this.Cat, ERRORTYPE_FDFSCONNECTIONERR, err.Error())
 			return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_FDFSCONNECTIONERR}
 		}
 	}
@@ -226,7 +235,6 @@ type NfsStorage struct {
 func (this *NfsStorage) Upload(bts []byte, fileExt string) (string, util.Error) {
 	return "", util.Error{}
 }
-	
 func (this *NfsStorage) UploadSlave(bts []byte, prefixName string, fileExtName string) (string, util.Error) {
 	return "", util.Error{}
 }
@@ -236,12 +244,15 @@ func (this *NfsStorage) Download() ([]byte, util.Error) {
 		bts []byte
 		err error
 	)
+	var messagesize int
 	if this.Cat != nil {
 		tran := this.Cat.NewTransaction(CATTITLE, "Nfs.Download")
+		tran.AddData("path", this.Path)
 		defer func() {
 			if err != nil {
 				tran.SetStatus(err)
 			} else {
+				util.LogEvent(this.Cat, "Size", util.GetImageSizeDistribution(messagesize), map[string]string{"size": strconv.Itoa(messagesize)})
 				tran.SetStatus("0")
 			}
 			tran.Complete()
@@ -249,8 +260,10 @@ func (this *NfsStorage) Download() ([]byte, util.Error) {
 	}
 	bts, err = ioutil.ReadFile(this.Path)
 	if err != nil {
-		return []byte{}, util.Error{IsNormal: false, Err: errors.New("download file failed!"), Type: ERRORTYPE_NFSDOWNLOADERR}
+		util.LogErrorEvent(this.Cat, ERRORTYPE_NFSDOWNLOADERR, err.Error())
+		return []byte{}, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_NFSDOWNLOADERR}
 	}
+	messagesize = len(bts)
 	return bts, util.Error{}
 }
 
@@ -261,6 +274,7 @@ func (this *NfsStorage) Delete(isDeleteAll bool) util.Error {
 	)
 	if this.Cat != nil {
 		tran := this.Cat.NewTransaction(CATTITLE, "Nfs.Delete")
+		tran.AddData("path", this.Path)
 		defer func() {
 			if err != nil {
 				tran.SetStatus(err)
@@ -277,6 +291,7 @@ func (this *NfsStorage) Delete(isDeleteAll bool) util.Error {
 	}
 	err = cmd.Run()
 	if err != nil {
+		util.LogErrorEvent(this.Cat, ERRORTYPE_NFSDELETEERR, err.Error())
 		return util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_NFSDELETEERR}
 	}
 	return util.Error{}

@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	ErrExistedSize = errors.New("size already exists in whitelist")
-	ErrConflict    = errors.New("data updates conflict")
-	ErrIllegalChannel   = errors.New("illegal channel")
-	ErrIllegalSize = errors.New("illegal size")
+	ErrExistedSize    = errors.New("size already exists in whitelist")
+	ErrConflict       = errors.New("data updates conflict")
+	ErrIllegalChannel = errors.New("illegal channel")
+	ErrIllegalSize    = errors.New("illegal size")
 )
 
 var (
@@ -58,8 +58,8 @@ func (c *WhitelistController) GetSizes() {
 		return
 	}
 	var conf models.Config = models.Config{
-		Channel: channel,
-		Key:     "sizes",
+		ChannelCode: channel,
+		Key:         "sizes",
 	}
 	sizes, err := conf.GetSizes()
 	if err != nil {
@@ -97,8 +97,8 @@ func (c *WhitelistController) Add() {
 	}
 
 	var conf models.Config = models.Config{
-		Channel: channel,
-		Key:     "sizes",
+		ChannelCode: channel,
+		Key:         "sizes",
 	}
 	err = conf.AddSize(size)
 	if err != nil {

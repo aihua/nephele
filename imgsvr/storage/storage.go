@@ -1,7 +1,7 @@
 package storage
 
 import (
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/fdfs"
 	"github.com/ctripcorp/nephele/imgsvr/storage/nfs"
 	"strconv"

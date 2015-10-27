@@ -3,8 +3,8 @@ package imgsvr
 import (
 	"bytes"
 	"errors"
-	log "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Sirupsen/logrus"
-	cat "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/ctripcorp/cat.go"
+	log "github.com/Sirupsen/logrus"
+	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgsvr/data"
 	"github.com/ctripcorp/nephele/imgsvr/img4g"
 	"github.com/ctripcorp/nephele/imgsvr/proc"
@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -175,17 +174,6 @@ func GetIP() string {
 	return ""
 }
 
-func GetClientIP(req *http.Request) string {
-	addr := req.Header.Get("X-Real-IP")
-	if addr == "" {
-		addr = req.Header.Get("X-Forwarded-For")
-		if addr == "" {
-			addr = req.RemoteAddr
-		}
-	}
-	return addr
-}
-
 func GetHttp(url string) ([]byte, error) {
 	timeout := time.Duration(time.Second)
 	client := http.Client{
@@ -266,47 +254,6 @@ func GetImageSizeDistribution(size int) string {
 		return "20~30M"
 	default:
 		return ">30M"
-	}
-}
-
-// Alloc        uint64      bytes allocated and still in use // 已分配且仍在使用的字节数
-// 	TotalAlloc   uint64      // bytes allocated (even if freed) // 已分配（包括已释放的）字节数
-// 	Sys          uint64      // bytes obtained from system (sum of XxxSys below) // 从系统中获取的字节数（应当为下面 XxxSys 之和）
-// 	Mallocs      uint64      // number of mallocs // malloc 数
-// 	Frees        uint64      // number of frees // free 数
-// 	HeapAlloc    uint64      // bytes allocated and still in use // 已分配且仍在使用的字节数
-// 	HeapSys      uint64      // bytes obtained from system // 从系统中获取的字节数
-// 	HeapIdle     uint64      // bytes in idle spans // 空闲区间的字节数
-// 	HeapInuse    uint64      // bytes in non-idle span // 非空闲区间的字节数
-// 	HeapReleased uint64      // bytes released to the OS // 释放给OS的字节数
-// 	HeapObjects  uint64      // total number of allocated objects// 已分配对象的总数
-// 	OtherSys     uint64      // other system allocations // 其它系统分配
-// 	NextGC       uint64      // next run in HeapAlloc time (bytes) // 下次运行的 HeapAlloc 时间（字节）
-// 	LastGC       uint64      // last run in absolute time (ns) // 上次运行的绝对时间（纳秒 ns）
-// 	PauseNs      [256]uint64 // circular buffer of recent GC pause times, most recent at [(NumGC+255)%256]
-// 	NumGC        uint32
-
-func GetStatus() map[string]string {
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	var second uint64 = 1000000000
-	var memory uint64 = 1024 * 1024
-	return map[string]string{"Alloc": strconv.FormatUint(mem.Alloc/memory, 10),
-		"TotalAlloc":   strconv.FormatUint(mem.TotalAlloc/memory, 10),
-		"Sys":          strconv.FormatUint(mem.Sys/memory, 10),
-		"Mallocs":      strconv.FormatUint(mem.Mallocs, 10),
-		"Frees":        strconv.FormatUint(mem.Frees, 10),
-		"HeapAlloc":    strconv.FormatUint(mem.HeapAlloc/memory, 10),
-		"HeapSys":      strconv.FormatUint(mem.HeapSys/memory, 10),
-		"HeapIdle":     strconv.FormatUint(mem.HeapIdle/memory, 10),
-		"HeapInuse":    strconv.FormatUint(mem.HeapInuse/memory, 10),
-		"HeapReleased": strconv.FormatUint(mem.HeapReleased/memory, 10),
-		"HeapObjects":  strconv.FormatUint(mem.HeapObjects, 10),
-		"OtherSys":     strconv.FormatUint(mem.OtherSys, 10),
-		"NextGC":       strconv.FormatUint(mem.NextGC/second, 10),
-		"LastGC":       strconv.FormatUint(mem.LastGC/second, 10),
-		"PauseNs":      strconv.FormatUint(mem.PauseNs[(mem.NumGC+255)%256]/second, 10),
-		"NumGC":        strconv.Itoa(int(mem.NumGC)),
 	}
 }
 

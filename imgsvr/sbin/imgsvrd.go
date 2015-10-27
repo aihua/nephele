@@ -1,7 +1,7 @@
 package main
 
 import (
-	log "github.com/ctripcorp/nephele/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/ctripcorp/nephele/imgsvr"
 	"github.com/ctripcorp/nephele/util"
 	_ "net/http/pprof"
@@ -147,7 +147,6 @@ func init() {
 
 	initLog()
 }
-
 
 //initial logrus
 func initLog() {

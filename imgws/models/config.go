@@ -40,9 +40,9 @@ var (
 
 type Config struct {
 	//Consistent Fields
-	Id      int64 `orm:"auto"`
-	Channel string
-	Key     string
+	Id          int64 `orm:"auto"`
+	ChannelCode string
+	Key         string
 
 	//Inconsistent Fields
 	Value      string
@@ -72,7 +72,7 @@ func (this *Config) Insert() error {
 		}()
 	}
 	o := orm.NewOrm()
-	res, err = o.Raw("INSERT INTO config(channel,`key`,value,recordTime)VALUES(?,?,?,?)", this.Channel, this.Key, this.Value, this.Recordtime).Exec()
+	res, err = o.Raw("INSERT INTO config(channelCode,`key`,value,recordTime)VALUES(?,?,?,?)", this.ChannelCode, this.Key, this.Value, this.Recordtime).Exec()
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (this *Config) UpdateValue() error {
 
 	o := orm.NewOrm()
 	now := getNow()
-	_, err = o.Raw("UPDATE config SET value=?, recordtime=? WHERE channel=? AND `key`=?", this.Value, now, this.Channel, this.Key).Exec()
+	_, err = o.Raw("UPDATE config SET value=?, recordtime=? WHERE channelCode=? AND `key`=?", this.Value, now, this.ChannelCode, this.Key).Exec()
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (this *Config) GetSizes() (string, error) {
 	}
 	o := orm.NewOrm()
 	var maps []orm.Params
-	num, err = o.Raw("SELECT value,recordTime FROM config WHERE `channel` = ? AND `key` = ?", this.Channel, this.Key).Values(&maps)
+	num, err = o.Raw("SELECT value,recordTime FROM config WHERE `channelCode` = ? AND `key` = ?", this.ChannelCode, this.Key).Values(&maps)
 	if err != nil {
 		return EmptyString, err
 	}
@@ -163,7 +163,7 @@ func (this *Config) AddSize(size string) error {
 	}
 	o := orm.NewOrm()
 	var maps []orm.Params
-	num, err = o.Raw("SELECT * FROM config WHERE `channel` = ? AND `key` = ?", this.Channel, this.Key).Values(&maps)
+	num, err = o.Raw("SELECT * FROM config WHERE `channelCode` = ? AND `key` = ?", this.ChannelCode, this.Key).Values(&maps)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (this *Config) AddSize(size string) error {
 			newValue := maps[0]["value"].(string) + "," + size
 			newRecordtime := getNow()
 
-			result, err = o.Raw("UPDATE config set `value` = ?, `recordtime` = ? WHERE `channel` = ? AND `key` = ? AND `recordtime` = ?", newValue, newRecordtime, this.Channel, this.Key, maps[0]["recordTime"]).Exec()
+			result, err = o.Raw("UPDATE config set `value` = ?, `recordtime` = ? WHERE `channelCode` = ? AND `key` = ? AND `recordtime` = ?", newValue, newRecordtime, this.ChannelCode, this.Key, maps[0]["recordTime"]).Exec()
 			if err != nil {
 				return err
 			}
@@ -222,21 +222,26 @@ func (this *Config) GetConfigs() (map[string]map[string]string, util.Error) {
 				tran.Complete()
 			}()
 		}
+
 		o := orm.NewOrm()
-		var configs []Config
-		_, err = o.Raw("SELECT channel,`key`,value FROM config").QueryRows(&configs)
+		var list []orm.Params
+		_, err = o.Raw("SELECT channelCode,`key`,value FROM config").Values(&list)
 		if err != nil {
+			util.LogErrorEvent(this.Cat, ERRORTYPE_GETCONFIGS, err.Error())
 			return nil, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_GETCONFIGS}
 		}
 		m := make(map[string]map[string]string)
-		for _, config := range configs {
-			_, exists := m[config.Channel]
+		for _, v := range list {
+			channelCode := v["channelCode"].(string)
+			key := v["key"].(string)
+			value := v["value"].(string)
+			_, exists := m[channelCode]
 			if exists {
-				m[config.Channel][config.Key] = config.Value
+				m[channelCode][key] = value
 			} else {
 				childmap := make(map[string]string)
-				childmap[config.Key] = config.Value
-				m[config.Channel] = childmap
+				childmap[key] = value
+				m[channelCode] = childmap
 			}
 		}
 		config = m
@@ -249,14 +254,14 @@ func isRefresh(t time.Time) bool {
 	return t.Add(1 * time.Minute).Before(time.Now())
 }
 
-func (this *Config) GetChannelConfigs(channel string) (map[string]string, util.Error) {
+func (this *Config) GetChannelConfigs(channelCode string) (map[string]string, util.Error) {
 	configs, e := this.GetConfigs()
 	if e.Err != nil {
 		return nil, e
 	}
-	config, exists := configs[channel]
+	config, exists := configs[channelCode]
 	if !exists {
-		return nil, util.Error{IsNormal: false, Err: errors.New(util.JoinString("channel[", channel, "] Config is't exists!")), Type: ERRORTYPE_CONFIGNOEXISTS}
+		return nil, util.Error{IsNormal: false, Err: errors.New(util.JoinString("channelCode[", channelCode, "] Config is't exists!")), Type: ERRORTYPE_CONFIGNOEXISTS}
 	}
 	return config, util.Error{}
 }
@@ -333,12 +338,13 @@ func (this *Config) getValue(channel, key string) (string, util.Error) {
 			return value, util.Error{}
 		}
 	}
-
-	defaultConfigs, exists := configs[CONFIG_DEFAULTCHANNEL]
-	if exists {
-		value, exists = defaultConfigs[key]
+	if channel != CONFIG_DEFAULTCHANNEL {
+		defaultConfigs, exists := configs[CONFIG_DEFAULTCHANNEL]
 		if exists {
-			return value, util.Error{}
+			value, exists = defaultConfigs[key]
+			if exists {
+				return value, util.Error{}
+			}
 		}
 	}
 	return "", util.Error{IsNormal: false, Err: errors.New(util.JoinString("Channel[", channel, "] Key[", key, "] is't exists!")), Type: ERRORTYPE_CONFIGNOEXISTS}

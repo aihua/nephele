@@ -42,7 +42,7 @@ func (this *Channel) Insert() error {
 func (this *Channel) Update() error {
 	var err error
 	if this.Cat != nil {
-		tran := this.Cat.NewTransaction(DBTITLE, "Channel.Upldate")
+		tran := this.Cat.NewTransaction(DBTITLE, "Channel.Update")
 		defer func() {
 			if err != nil {
 				tran.SetStatus(err)
@@ -53,16 +53,16 @@ func (this *Channel) Update() error {
 		}()
 	}
 	o := orm.NewOrm()
-	_, err = o.Raw("UPDATE channel SET code=? WHERE name=?", this.Code, this.Name).Exec()
+	_, err = o.Raw("UPDATE channel SET name=? WHERE code=?", this.Name, this.Code).Exec()
 	return err
 }
 
-func (this *Channel) GetChannels() (map[string]string, util.Error) {
+func (this *Channel) GetAll() (map[string]string, util.Error) {
 	var err error
 	if len(channels) < 1 || IsRefresh(getChannelsTime) {
 		if this.Cat != nil {
 			var err error
-			tran := this.Cat.NewTransaction(DBTITLE, "Channel.Get")
+			tran := this.Cat.NewTransaction(DBTITLE, "Channel.GetAll")
 			defer func() {
 				if err != nil {
 					tran.SetStatus(err)
@@ -74,9 +74,10 @@ func (this *Channel) GetChannels() (map[string]string, util.Error) {
 		}
 
 		o := orm.NewOrm()
-		res := make(orm.Params)
+		var res orm.Params
 		_, err = o.Raw("SELECT name,code FROM channel").RowsToMap(&res, "name", "code")
 		if err != nil {
+			util.LogErrorEvent(this.Cat, ERRORTYPE_GETCHANNEL, err.Error())
 			return nil, util.Error{IsNormal: false, Err: err, Type: ERRORTYPE_GETCHANNEL}
 		}
 		m := make(map[string]string)
@@ -89,12 +90,12 @@ func (this *Channel) GetChannels() (map[string]string, util.Error) {
 	return channels, util.Error{}
 }
 
-func (this *Channel) GetChannelCode(channel string) string {
-	channels, e := this.GetChannels()
+func (this *Channel) GetChannelCode(channelName string) string {
+	channels, e := this.GetAll()
 	if e.Err != nil {
 		return ""
 	}
-	code, _ := channels[channel]
+	code, _ := channels[channelName]
 	return code
 }
 
