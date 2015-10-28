@@ -58,14 +58,30 @@ func GetIP() string {
 }
 
 func GetClientIP(req *http.Request) string {
-	addr := req.Header.Get("X-Real-IP")
-	if addr == "" {
-		addr = req.Header.Get("X-Forwarded-For")
-		if addr == "" {
-			addr = req.RemoteAddr
+	//addr := req.Header.Get("X-Real-IP")
+	//if addr == "" {
+	//	addr = req.Header.Get("X-Forwarded-For")
+	//	if addr == "" {
+	//		addr = req.RemoteAddr
+	//	}
+	//}
+
+	ip := ""
+	if ips := req.Header.Get("X-Forwarded-For"); ips != "" {
+		ip = strings.Split(ips, ",")[0]
+	}
+
+	if ip != "" {
+		rip := strings.Split(ip, ":")
+		return rip[0]
+	}
+	ips := strings.Split(req.RemoteAddr, ":")
+	if len(ips) > 0 {
+		if ips[0] != "[" {
+			return ips[0]
 		}
 	}
-	return addr
+	return "127.0.0.1"
 }
 
 func Substr(str string, start, length int) string {
