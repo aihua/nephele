@@ -1,49 +1,75 @@
 package nfs
 
-import ( 
+import (
 	"io/ioutil"
+	"net/http"
 	"strings"
+	"strconv"
 )
 
 type NFSClient struct {
 	Path string
 }
 
-type Error interface {
-	Error() string
-	Normal() bool //is normal error?
-	Type() string //error type
+type FileNotExistError string
+
+func (e FileNotExistError) Type() string { return "FileNotExistError" }
+
+func (e FileNotExistError) Normal() bool { return true }
+
+func (e FileNotExistError) Error() string { return "no such file or directory:" + string(e) }
+
+type HttpStatusError struct {
+	path       string
+	statusCode int
 }
 
-type readError struct {
-	error
+func (e *HttpStatusError) Type() string { return "HttpStatusError" }
+
+func (e *HttpStatusError) Normal() bool { return true }
+
+func (e *HttpStatusError) Error() string {
+	return "http status error: " + strconv.Itoa(e.statusCode) + ", request path: " + string(e.path)
 }
 
-func wrapError(err error) Error {
-	return &readError{err}
-}
-
-func (e *readError) Type() string {
-	if strings.Contains(e.Error(), "no such file or directory") {
-		return "FileNotExistError"
+func (this *NFSClient) Get() (b []byte, e error) {
+	if strings.Contains(this.Path, "http://") {
+		b, e = this.httpGet(this.Path)
 	} else {
-		return "UnExpectedError"
+		b, e = this.localGet(this.Path)
 	}
+	return 
 }
 
-func (e *readError) Normal() bool {
-	if e.Type() == "FileNotExistError" {
-		return true
-	} else {
-		return false
-	}
-}
-
-func (this *NFSClient) Get() ([]byte, error) {
-	buff, err := ioutil.ReadFile(this.Path)
+func (this *NFSClient) httpGet(path string) ([]byte, error) {
+	resp, err := http.Get(path)
 	if err != nil {
-		return nil, wrapError(err)
-	} else {
-		return buff, nil
+		// handle error
+		return nil, err
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return nil, FileNotExistError(this.Path)
+	}
+	if resp.StatusCode != 200 {
+		return nil, &HttpStatusError{path, resp.StatusCode}
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	} else {
+		return body, nil
+	}
+}
+
+func (this *NFSClient) localGet(path string) ([]byte, error) {
+	buff, err := ioutil.ReadFile(path)
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			return nil, FileNotExistError(path)
+		} else {
+			return nil, err
+		}
+	}
+	return buff, nil
 }

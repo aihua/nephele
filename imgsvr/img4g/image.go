@@ -2,9 +2,10 @@ package img4g
 
 /*
 #cgo CFLAGS: -std=c99
-#cgo CPPFLAGS: -I/usr/local/include/GraphicsMagick
-#cgo LDFLAGS: -L/usr/lib -L/usr/lib -lGraphicsMagickWand -lGraphicsMagick -ltiff -lfreetype -ljpeg -lpng16 -lXext -lSM -lICE -lX11 -llzma -lbz2 -lxml2 -lz -lm -lgomp -lpthread
+#cgo CPPFLAGS: -I/usr/local/GraphicsMagick-1.3.18/include/GraphicsMagick
+#cgo LDFLAGS: -L/usr/local/GraphicsMagick-1.3.18/lib  -lGraphicsMagickWand -lGraphicsMagick -ljpeg -lpng16 -lz -lm -lgomp -lpthread -lpixels -ldigimark
 #include <wand/magick_wand.h>
+#include <digimark/digimark.h>
 #include "cmagick.h"
 */
 import "C"
@@ -86,6 +87,34 @@ func (this *Image) Resize(width int64, height int64) error {
 		descr := C.MagickGetException(this.magickWand, (*C.ExceptionType)(unsafe.Pointer(&etype)))
 		defer C.MagickRelinquishMemory(unsafe.Pointer(descr))
 		err = errors.New(fmt.Sprintf("error resizing image: %s (ExceptionType = %d)", C.GoString(descr), etype))
+		return err
+	}
+
+	return nil
+}
+
+/*
+DigitalWatermark() embed copyright image information into this image. The
+watermark is imperceptible to human senses
+
+copyright: The copyright image
+*/
+func (this *Image) DigitalWatermark(copyright *Image) error {
+	var err error = nil
+	if this.magickWand == nil {
+		err = errors.New("error digital-watermark image: magickwand is nil")
+		return err
+	}
+	if copyright.magickWand == nil {
+		err = errors.New("error digital-watermark image:copyright image wand is nil")
+		return err
+	}
+	status := C.digimark_insert(this.magickWand, copyright.magickWand)
+	if status == 0 {
+		var etype int
+		descr := C.digimark_get_error(this.magickWand, (*C.int)(unsafe.Pointer(&etype)))
+		defer C.digimark_relinquish_memory(unsafe.Pointer(descr))
+		err = errors.New(fmt.Sprintf("error digital-watermark image: %s (ExceptionType = %d)", C.GoString(descr), etype))
 		return err
 	}
 
@@ -347,6 +376,32 @@ func (this *Image) GetWidth() (int64, error) {
 	width, err := C.MagickGetImageWidth(this.magickWand)
 
 	return int64(width), err
+}
+
+/*
+GetFormat() return format of this image
+*/
+func (this *Image) GetFormat() (string, error) {
+	var err error = nil
+	tran := this.Cat.NewTransaction("GraphicsMagickCmd", "GetFormat")
+	defer func() {
+		tran.SetStatus(err)
+		tran.Complete()
+	}()
+	if this.magickWand == nil {
+		err = errors.New("error get image format:magickwand is nil")
+		return "", err
+	}
+
+	format := C.MagickGetImageFormat(this.magickWand)
+	if format == nil {
+		var etype int
+		descr := C.MagickGetException(this.magickWand, (*C.ExceptionType)(unsafe.Pointer(&etype)))
+		defer C.MagickRelinquishMemory(unsafe.Pointer(descr))
+		err = errors.New(fmt.Sprintf("error get image format: %s (ExceptionType = %d)", C.GoString(descr), etype))
+		return "", err
+	}
+	return C.GoString(format), nil
 }
 
 /*

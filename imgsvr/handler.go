@@ -17,7 +17,8 @@ import (
 )
 
 var (
-	legalUrl     = util.RegexpExt{regexp.MustCompile("^/images/(.*?)_(R|C|Z|W)_([0-9]+)_([0-9]+)(_R([0-9]+))?(_C([a-zA-Z]+))?(_Q(?P<n0>[0-9]+))?(_M((?P<wn>[a-zA-Z0-9]+)(_(?P<wl>[1-9]))?))?.(?P<ext>jpg|jpeg|gif|png|Jpg)$")}
+	legalUrl     = util.RegexpExt{regexp.MustCompile("^/images/(.*?)_(R|C|Z|W)_([0-9]+)_([0-9]+)(_R([0-9]+))?(_C([a-zA-Z]+))?(_Q(?P<n0>[0-9]+))?(_M((?P<wn>[a-zA-Z0-9]+)(_(?P<wl>[1-9]))?))?(_(?P<dwm>D))?.(?P<ext>jpg|jpeg|gif|png|Jpg)$")}
+	digimarkUrl  = util.RegexpExt{regexp.MustCompile("^/images/(.*?)(_(?P<dwm>D)).(?P<ext>jpg|jpeg|Jpg)$")}
 	forbiddenUrl = util.RegexpExt{regexp.MustCompile("^/images/fd/([a-zA-Z]+)/([a-zA-Z0-9]+)/(.*?)_Source.(?P<ext>jpg|jpeg|gif|png|Jpg)$")}
 	proxyPassUrl = util.RegexpExt{regexp.MustCompile("^/images/fd/([a-zA-Z]+)/([a-zA-Z0-9]+)/(.*?).(?P<ext>jpg|jpeg|gif|png|Jpg)$")}
 )
@@ -69,13 +70,20 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 
 	LogEvent(Cat, "UpstreamProcess", JoinString(GetIP(), ":", WorkerPort), nil)
 
+	isDigimarkUrl := false
 	params, ok1 := legalUrl.FindStringSubmatchMap(uri)
 	if !ok1 {
-		err = errors.New("URI.ParseError")
-		logErrWithUri(uri, err.Error(), "warnLevel")
-		LogErrorEvent(Cat, "URI.ParseError", "")
-		return
+		params, ok1 = digimarkUrl.FindStringSubmatchMap(uri)
+		if ok1 {
+			isDigimarkUrl = true
+		} else {
+			err = errors.New("URI.ParseError")
+			logErrWithUri(uri, err.Error(), "warnLevel")
+			LogErrorEvent(Cat, "URI.ParseError", "")
+			return
+		}
 	}
+
 	//parse storage from url parameters
 	store, storagetype, err1 := FindStorage(params, Cat)
 	if err1 != nil {
@@ -85,7 +93,13 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	//parse handlers chain from url parameters
-	chain, buildErr := handler.ChainBuilder.Build(params)
+	var chain *proc.ProcessorChain = nil
+	var buildErr *buildError = nil
+	if isDigimarkUrl == true {
+		chain, buildErr = handler.ChainBuilder.DigimarkProcChain(params)
+	} else {
+		chain, buildErr = handler.ChainBuilder.Build(params)
+	}
 	if buildErr != nil {
 		err = errors.New(buildErr.Type())
 		logErrWithUri(uri, buildErr.Error(), "warnLevel")

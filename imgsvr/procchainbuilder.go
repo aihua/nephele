@@ -16,12 +16,13 @@ type ProcChainBuilder struct {
 }
 
 var (
-	CmdStrip     = "s"
-	CmdFormat    = "f"
-	CmdResize    = "resize"
-	CmdQuality   = "q"
-	CmdWaterMark = "m"
-	CmdRotate    = "rotate"
+	CmdStrip            = "s"
+	CmdFormat           = "f"
+	CmdResize           = "resize"
+	CmdQuality          = "q"
+	CmdWaterMark        = "m"
+	CmdRotate           = "rotate"
+	CmdDigitalWatermark = "d"
 )
 
 type buildError struct {
@@ -33,8 +34,37 @@ func (e *buildError) Type() string {
 	return e.errType
 }
 
+func (this *ProcChainBuilder) DigimarkProcChain(params map[string]string) (*proc.ProcessorChain, *buildError) {
+	procChain := &proc.ProcessorChain{Chain: make([]proc.ImageProcessor, 0, 10)}
+	_, channel, _ := ParseUri(params[":1"])
+	stripProcessor, e := this.getStripProcessor(channel, params)
+	if e != nil {
+		return nil, &buildError{e, "UrlStripCmdError"}
+	}
+	procChain.Chain = append(procChain.Chain, stripProcessor)
+	log.Debug("add strip processor")
+	dwmProcessor, e := this.getDigitalWatermarkProcessor(channel, params)
+	if e != nil {
+		return nil, &buildError{e, "UrlDigitalWatermarkCmdError"}
+	}
+	if dwmProcessor != nil {
+		procChain.Chain = append(procChain.Chain, dwmProcessor)
+		log.Debug("add digital watermark processor")
+	}
+	formatProcessor, e := this.getFormatProcessor(channel, params)
+	if e != nil {
+		return nil, &buildError{e, "UrlFormatCmdError"}
+	}
+	if formatProcessor != nil {
+		procChain.Chain = append(procChain.Chain, formatProcessor)
+		log.Debug("add format processor")
+	}
+
+	return procChain, nil
+}
+
 func (this *ProcChainBuilder) Build(params map[string]string) (*proc.ProcessorChain, *buildError) {
-	procChain := &proc.ProcessorChain{Chain: make([]proc.ImageProcessor, 0, 5)}
+	procChain := &proc.ProcessorChain{Chain: make([]proc.ImageProcessor, 0, 10)}
 
 	sourceType, channel, path := ParseUri(params[":1"])
 	//_, channel, _ := ParseUri(params[":1"])
@@ -96,6 +126,15 @@ func (this *ProcChainBuilder) Build(params map[string]string) (*proc.ProcessorCh
 			if formatProcessor != nil {
 				procChain.Chain = append(procChain.Chain, formatProcessor)
 				log.Debug("add format processor")
+			}
+		case CmdDigitalWatermark:
+			dwmProcessor, e := this.getDigitalWatermarkProcessor(channel, params)
+			if e != nil {
+				return nil, &buildError{e, "UrlDigitalWatermarkCmdError"}
+			}
+			if dwmProcessor != nil {
+				procChain.Chain = append(procChain.Chain, dwmProcessor)
+				log.Debug("add digital watermark processor")
 			}
 		}
 	}
@@ -257,6 +296,24 @@ func (this *ProcChainBuilder) getQualityProcessor(channel string, params map[str
 	return &proc.QualityProcessor{quality, this.Cat}, nil
 }
 
+func (this *ProcChainBuilder) getDigitalWatermarkProcessor(channel string, params map[string]string) (proc.ImageProcessor, error) {
+	dwm, _ := params["dwm"]
+	if dwm == "" {
+		return nil, nil
+	}
+	copyrightdir, err := data.GetLogodir(channel)
+	if err != nil {
+		return nil, err
+	}
+	bts, err := GetImage("NFS", copyrightdir+"copy.jpg", this.Cat)
+	if err != nil {
+		return nil, err
+	}
+	copyright := &img4g.Image{Format: "jpg", Blob: bts, Cat: this.Cat}
+
+	return &proc.DigitalWatermarkProcessor{copyright, this.Cat}, nil
+}
+
 func (this *ProcChainBuilder) getWaterMarkProcessors(sourceType string, channel string, path string, params map[string]string) ([]proc.ImageProcessor, error) {
 	processors := make([]proc.ImageProcessor, 2)
 	//processors
@@ -279,6 +336,7 @@ func (this *ProcChainBuilder) getWaterMarkProcessors(sourceType string, channel 
 
 	return processors, nil
 }
+
 func (this *ProcChainBuilder) getLogoWaterMarkProcessor(channel string, params map[string]string) (proc.ImageProcessor, error) {
 	dissolve := this.getLogoDissolve(channel, params)
 	logodir, err := data.GetLogodir(channel)
