@@ -48,11 +48,29 @@ func EncReq(content []byte, req *request.Request) (err error) {
 	return nil
 }
 
+func DecReq(req *request.Request) ([]byte, error) {
+	content, err := xml.MarshalIndent(&req, "", "")
+	if err != nil {
+		return nil, err
+	}
+	str := string(content)
+	str = strings.Replace(str, "<", "&lt;", -1)
+	content = append(ReqPrefix, ([]byte(str))...)
+	content = append(content, ReqSuffix...)
+	return content, nil
+}
+
 func DecResp(header *response.Header, resp interface{}) ([]byte, error) {
 	var content []byte
 	var str string
 	headerContent, err := xml.MarshalIndent(&header, "", "")
+	if err != nil {
+		return nil, err
+	}
 	respContent, err := xml.MarshalIndent(&resp, "", "")
+	if err != nil {
+		return nil, err
+	}
 
 	content = append(headerContent, respContent...)
 
@@ -62,5 +80,5 @@ func DecResp(header *response.Header, resp interface{}) ([]byte, error) {
 
 	content = append(RespPrefix, ([]byte(str))...)
 	content = append(content, RespSuffix...)
-	return content, err
+	return content, nil
 }
