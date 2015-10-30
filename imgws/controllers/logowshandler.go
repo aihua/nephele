@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"errors"
 	"fmt"
 	cat "github.com/ctripcorp/cat.go"
 	"github.com/ctripcorp/nephele/imgws/business"
@@ -78,14 +77,8 @@ func (handler *LogoWS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		requestTran.Complete()
 	}()
-	switch req.Header.RequestType {
-	case REQUESTTYPE_SAVEIMAGE:
-		resp, e = logoRequest.Save(&req.SaveRequest)
-	default:
-		util.LogErrorEvent(Cat, "RequestTypeInvalid", req.Header.RequestType)
-		result = util.Error{IsNormal: true, Err: errors.New("requesttype is invalid!"), Type: "RequestTypeInvalid"}
-		//return
-	}
+	
+	resp, result = logoRequest.Save(&req.SaveRequest)
 
 	if result.Err != nil {
 		header = createFailHeader(req.Header, fmt.Sprintf("%v", result.Err))
