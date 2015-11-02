@@ -21,6 +21,8 @@ var (
 	RespSuffix   = []byte("&lt;/Response&gt;</RequestResult></RequestResponse></soap:Body></soap:Envelope>")
 	ReqPrefixLen = len(ReqPrefix)
 	ReqSuffixLen = len(ReqSuffix)
+	RespPrefixLen = len(RespPrefix)
+	RespSuffixLen = len(RespSuffix)
 )
 
 var (
@@ -58,6 +60,24 @@ func DecReq(req *request.Request) ([]byte, error) {
 	content = append(ReqPrefix, ([]byte(str))...)
 	content = append(content, ReqSuffix...)
 	return content, nil
+}
+
+func EncResp(content []byte, resp *response.Response) (err error) {
+	l := len(content)
+	if l < RespPrefixLen+RespSuffixLen {
+		return ErrCorruptedSoapStream
+	}
+	content = content[RespPrefixLen : l-RespSuffixLen]
+	content = append([]byte("&lt;Response&gt;"), content...)
+	content = append(content, []byte("&lt;/Response&gt;")...)
+	s := string(content)
+	s = strings.Replace(s, "&lt;", "<", -1)
+	s = strings.Replace(s, "&gt;", ">", -1)
+	err = xml.Unmarshal([]byte(s), &resp)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func DecResp(header *response.Header, resp interface{}) ([]byte, error) {

@@ -16,7 +16,6 @@ func getTextImage(text string, size int) []byte {
 	l := len(text)
 	w := size * 3 * (l+6)
 	h := size * 2
-	println(l, w ,h)
 	pw.SetColor("none")
 	mw.NewImage(uint(w), uint(h), pw)
 	pw.SetColor("white")
