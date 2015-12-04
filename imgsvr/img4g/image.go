@@ -2,8 +2,8 @@ package img4g
 
 /*
 #cgo CFLAGS: -std=c99
-#cgo CPPFLAGS: -I/usr/local/GraphicsMagick-1.3.18/include/GraphicsMagick
-#cgo LDFLAGS: -L/usr/local/GraphicsMagick-1.3.18/lib  -lGraphicsMagickWand -lGraphicsMagick -ljpeg -lpng16 -lz -lm -lgomp -lpthread -lpixels -ldigimark
+#cgo CPPFLAGS: -I/usr/local/include/GraphicsMagick
+#cgo LDFLAGS: -L/usr/local/lib -L/usr/local/lib64 -L/usr/lib -L/usr/lib64 -lGraphicsMagickWand -lGraphicsMagick -lfreetype -ljpeg -lpng12  -lbz2 -lxml2  -lz -lm -lgomp  -lpthread -ldigimark  -Wl,-no_compact_unwind
 #include <wand/magick_wand.h>
 #include <digimark/digimark.h>
 #include "cmagick.h"

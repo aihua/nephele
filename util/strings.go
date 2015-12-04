@@ -3,12 +3,6 @@ package util
 import (
 	"archive/zip"
 	"bytes"
-	cat "github.com/ctripcorp/cat.go"
-	"net"
-	"net/http"
-	"runtime"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -31,57 +25,6 @@ func JoinString(args ...string) string {
 
 func GetPartitionKey(t time.Time) int16 {
 	return int16((t.Year()-2015)*12 + int(t.Month()) - 1)
-}
-
-var localIP string = ""
-
-func GetIP() string {
-	if localIP != "" {
-		return localIP
-	}
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, addr := range addrs {
-		add := strings.Split(addr.String(), "/")[0]
-		if add == "127.0.0.1" || add == "::1" {
-			continue
-		}
-		first := strings.Split(add, ".")[0]
-		if _, err := strconv.Atoi(first); err == nil {
-			localIP = add
-			return add
-		}
-	}
-	return ""
-}
-
-func GetClientIP(req *http.Request) string {
-	//addr := req.Header.Get("X-Real-IP")
-	//if addr == "" {
-	//	addr = req.Header.Get("X-Forwarded-For")
-	//	if addr == "" {
-	//		addr = req.RemoteAddr
-	//	}
-	//}
-
-	ip := ""
-	if ips := req.Header.Get("X-Forwarded-For"); ips != "" {
-		ip = strings.Split(ips, ",")[0]
-	}
-
-	if ip != "" {
-		rip := strings.Split(ip, ":")
-		return rip[0]
-	}
-	ips := strings.Split(req.RemoteAddr, ":")
-	if len(ips) > 0 {
-		if ips[0] != "[" {
-			return ips[0]
-		}
-	}
-	return "127.0.0.1"
 }
 
 func Substr(str string, start, length int) string {
@@ -131,29 +74,29 @@ func Zip(files map[string][]byte) ([]byte, Error) {
 	return buffer.Bytes(), Error{}
 }
 
-func LogErrorEvent(cat cat.Cat, name string, err string) {
-	if cat == nil {
-		return
-	}
-	event := cat.NewEvent("Error", name)
-	event.AddData("detail", err)
-	event.SetStatus("ERROR")
-	event.Complete()
-}
+// func LogErrorEvent(cat cat.Cat, name string, err string) {
+// 	if cat == nil {
+// 		return
+// 	}
+// 	event := cat.NewEvent("Error", name)
+// 	event.AddData("detail", err)
+// 	event.SetStatus("ERROR")
+// 	event.Complete()
+// }
 
-func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
-	if cat == nil {
-		return
-	}
-	event := cat.NewEvent(title, name)
-	if data != nil {
-		for k, v := range data {
-			event.AddData(k, v)
-		}
-	}
-	event.SetStatus("0")
-	event.Complete()
-}
+// func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
+// 	if cat == nil {
+// 		return
+// 	}
+// 	event := cat.NewEvent(title, name)
+// 	if data != nil {
+// 		for k, v := range data {
+// 			event.AddData(k, v)
+// 		}
+// 	}
+// 	event.SetStatus("0")
+// 	event.Complete()
+// }
 
 // Alloc        uint64      bytes allocated and still in use // 已分配且仍在使用的字节数
 // 	TotalAlloc   uint64      // bytes allocated (even if freed) // 已分配（包括已释放的）字节数
@@ -171,30 +114,6 @@ func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
 // 	LastGC       uint64      // last run in absolute time (ns) // 上次运行的绝对时间（纳秒 ns）
 // 	PauseNs      [256]uint64 // circular buffer of recent GC pause times, most recent at [(NumGC+255)%256]
 // 	NumGC        uint32
-
-func GetStatus() map[string]string {
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	var second uint64 = 1000000000
-	var memory uint64 = 1024 * 1024
-	return map[string]string{"Alloc": strconv.FormatUint(mem.Alloc/memory, 10),
-		"TotalAlloc":   strconv.FormatUint(mem.TotalAlloc/memory, 10),
-		"Sys":          strconv.FormatUint(mem.Sys/memory, 10),
-		"Mallocs":      strconv.FormatUint(mem.Mallocs, 10),
-		"Frees":        strconv.FormatUint(mem.Frees, 10),
-		"HeapAlloc":    strconv.FormatUint(mem.HeapAlloc/memory, 10),
-		"HeapSys":      strconv.FormatUint(mem.HeapSys/memory, 10),
-		"HeapIdle":     strconv.FormatUint(mem.HeapIdle/memory, 10),
-		"HeapInuse":    strconv.FormatUint(mem.HeapInuse/memory, 10),
-		"HeapReleased": strconv.FormatUint(mem.HeapReleased/memory, 10),
-		"HeapObjects":  strconv.FormatUint(mem.HeapObjects, 10),
-		"OtherSys":     strconv.FormatUint(mem.OtherSys, 10),
-		"NextGC":       strconv.FormatUint(mem.NextGC/second, 10),
-		"LastGC":       strconv.FormatUint(mem.LastGC/second, 10),
-		"PauseNs":      strconv.FormatUint(mem.PauseNs[(mem.NumGC+255)%256]/second, 10),
-		"NumGC":        strconv.Itoa(int(mem.NumGC)),
-	}
-}
 
 func GetImageSizeDistribution(size int) string {
 	switch {

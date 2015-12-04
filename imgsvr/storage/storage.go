@@ -2,7 +2,7 @@ package storage
 
 import (
 	cat "github.com/ctripcorp/cat.go"
-	"github.com/ctripcorp/nephele/fdfs"
+	"github.com/ctripcorp/nephele/imgsvr/storage/fdfs"
 	"github.com/ctripcorp/nephele/imgsvr/storage/nfs"
 	"strconv"
 )
@@ -10,6 +10,14 @@ import (
 type Storage interface {
 	GetImage() ([]byte, error)
 }
+
+type StorageArgument struct {
+	Type    string
+	Channel string
+	Path    string
+}
+
+func Parse()
 
 type Fdfs struct {
 	Path          string
@@ -22,13 +30,26 @@ var client fdfs.FdfsClient = nil
 var lock chan int = make(chan int, 1)
 var initialized bool = false
 
-func (this *Fdfs) GetImage() ([]byte, error) {
+func (f *Fdfs) GetImage() ([]byte, error) {
+	fdfsClient, err := f.getClient()
+	if err != nil {
+		return nil, err
+	}
+	bts, err := fdfsClient.DownloadToBuffer(this.Path, this.Cat)
+	if err != nil {
+		return nil, err
+	} else {
+		return bts, nil
+	}
+}
+
+func (f *Fdfs) getClient() fdfs.FdfsClient {
 	if client == nil {
 		lock <- 0
 		if !initialized {
 			if client == nil {
 				var e error
-				client, e = fdfs.NewFdfsClient([]string{this.TrackerDomain}, strconv.Itoa(this.Port))
+				client, e = fdfs.NewFdfsClient([]string{f.TrackerDomain}, strconv.Itoa(f.Port))
 				if e != nil {
 					return nil, e
 				}
@@ -37,12 +58,7 @@ func (this *Fdfs) GetImage() ([]byte, error) {
 		}
 		<-lock
 	}
-	bts, err := client.DownloadToBuffer(this.Path, this.Cat)
-	if err != nil {
-		return nil, err
-	} else {
-		return bts, nil
-	}
+	return client, nil
 }
 
 type Nfs struct {

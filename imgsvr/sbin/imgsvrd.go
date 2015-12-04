@@ -142,7 +142,7 @@ func getArgs() (int, string, string) {
 }
 
 func init() {
-	//initial cat
+	//initial cati
 	util.InitCat()
 
 	initLog()

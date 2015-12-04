@@ -152,44 +152,22 @@ func GetImage(storageType string, path string, Cat cat.Cat) ([]byte, error) {
 
 var localIP string = ""
 
-func GetIP() string {
-	if localIP != "" {
-		return localIP
-	}
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, addr := range addrs {
-		add := strings.Split(addr.String(), "/")[0]
-		if add == "127.0.0.1" || add == "::1" {
-			continue
-		}
-		first := strings.Split(add, ".")[0]
-		if _, err := strconv.Atoi(first); err == nil {
-			localIP = add
-			return add
-		}
-	}
-	return ""
-}
-
-func GetHttp(url string) ([]byte, error) {
-	timeout := time.Duration(time.Second)
-	client := http.Client{
-		Timeout: timeout,
-	}
-	rsp, err := client.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer rsp.Body.Close()
-	bts, err := ioutil.ReadAll(rsp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return bts, nil
-}
+// func GetHttp(url string) ([]byte, error) {
+// 	timeout := time.Duration(time.Second)
+// 	client := http.Client{
+// 		Timeout: timeout,
+// 	}
+// 	rsp, err := client.Get(url)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rsp.Body.Close()
+// 	bts, err := ioutil.ReadAll(rsp.Body)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return bts, nil
+// }
 
 func PostHttp(uri string, data url.Values) ([]byte, error) {
 	timeout := time.Duration(time.Second)
@@ -208,27 +186,27 @@ func PostHttp(uri string, data url.Values) ([]byte, error) {
 	return bts, nil
 }
 
-func KillProcessByPort(port string) error {
-	cmd := exec.Command("sh", "-c", JoinString("lsof -i:", port, "|grep LISTEN|awk '{print $2}'"))
-	//	cmd.Env = append(cmd.Env, os.Getenv("PATH"))
-	bts, err := cmd.Output()
-	if err != nil {
-		return err
-	}
-	pid := strings.TrimSpace(string(bts))
-	if pid == "" {
-		return nil
-	}
-	id, err := strconv.Atoi(pid)
-	if err != nil {
-		return err
-	}
-	p, err := os.FindProcess(id)
-	if err != nil {
-		return err
-	}
-	return p.Kill()
-}
+// func KillProcessByPort(port string) error {
+// 	cmd := exec.Command("sh", "-c", JoinString("lsof -i:", port, "|grep LISTEN|awk '{print $2}'"))
+// 	//	cmd.Env = append(cmd.Env, os.Getenv("PATH"))
+// 	bts, err := cmd.Output()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	pid := strings.TrimSpace(string(bts))
+// 	if pid == "" {
+// 		return nil
+// 	}
+// 	id, err := strconv.Atoi(pid)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	p, err := os.FindProcess(id)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return p.Kill()
+// }
 
 func GetImageSizeDistribution(size int) string {
 	switch {
@@ -257,34 +235,34 @@ func GetImageSizeDistribution(size int) string {
 	}
 }
 
-func LogErrorEvent(cat cat.Cat, name string, err string) {
-	event := cat.NewEvent("Error", name)
-	event.AddData("detail", err)
-	event.SetStatus("ERROR")
-	event.Complete()
-}
+// func LogErrorEvent(cat cat.Cat, name string, err string) {
+// 	event := cat.NewEvent("Error", name)
+// 	event.AddData("detail", err)
+// 	event.SetStatus("ERROR")
+// 	event.Complete()
+// }
 
-func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
-	event := cat.NewEvent(title, name)
-	if data != nil {
-		for k, v := range data {
-			event.AddData(k, v)
-		}
-	}
-	event.SetStatus("0")
-	event.Complete()
-}
+// func LogEvent(cat cat.Cat, title string, name string, data map[string]string) {
+// 	event := cat.NewEvent(title, name)
+// 	if data != nil {
+// 		for k, v := range data {
+// 			event.AddData(k, v)
+// 		}
+// 	}
+// 	event.SetStatus("0")
+// 	event.Complete()
+// }
 
 //log error with logging fields uri
-func logErrWithUri(uri string, errMsg string, errLevel string) {
-	switch errLevel {
-	case "errorLevel":
-		log.WithFields(log.Fields{
-			"uri": uri,
-		}).Error(errMsg)
-	default:
-		log.WithFields(log.Fields{
-			"uri": uri,
-		}).Warn(errMsg)
-	}
-}
+// func logErrWithUri(uri string, errMsg string, errLevel string) {
+// 	switch errLevel {
+// 	case "errorLevel":
+// 		log.WithFields(log.Fields{
+// 			"uri": uri,
+// 		}).Error(errMsg)
+// 	default:
+// 		log.WithFields(log.Fields{
+// 			"uri": uri,
+// 		}).Warn(errMsg)
+// 	}
+// }
